@@ -321,34 +321,6 @@ void MVM_jit_expr_load_operands(MVMThreadContext *tc, MVMJitExprTree *tree, MVMS
     }
 }
 
-/* This function is to check the internal consistency of a template
- * before I apply it.  I need this because I make a lot of mistakes in
- * writing templates, and debugging is hard. */
-static void check_template(MVMThreadContext *tc, const MVMJitExprTemplate *template, MVMSpeshIns *ins) {
-    MVMint32 i;
-    for (i = 0; i < template->len; i++) {
-        switch(template->info[i]) {
-        case 0:
-            MVM_oops(tc, "JIT: Template info shorter than template length (instruction %s)", ins->info->name);
-            break;
-        case 'l':
-            if (template->code[i] >= i || template->code[i] < 0)
-                MVM_oops(tc, "JIT: Template link out of bounds (instruction: %s)", ins->info->name);
-            break;
-        case 'f':
-            if (template->code[i] < 0 ||
-                (template->code[i] >= ins->info->num_operands &&
-                 !ins_has_single_input_output_operand(ins)))
-                MVM_oops(tc, "JIT: Operand access out of bounds (instruction: %s)", ins->info->name);
-            break;
-        default:
-            continue;
-        }
-    }
-    if (template->info[i])
-        MVM_oops(tc, "JIT: Template info longer than template length (instruction: %s)",
-                 ins->info->name);
-}
 
 /* Add template to nodes, filling in operands and linking tree nodes. Return template root */
 static MVMint32 apply_template(MVMThreadContext *tc, MVMJitExprTree *tree, MVMint32 len, char *info,
@@ -708,8 +680,6 @@ MVMJitExprTree * MVM_jit_expr_tree_build(MVMThreadContext *tc, MVMJitGraph *jg, 
 
         template = MVM_jit_get_template_for_opcode(opcode);
         BAIL(template == NULL, "Cannot get template for: %s\n", ins->info->name);
-
-        check_template(tc, template, ins);
 
         MVM_jit_expr_load_operands(tc, tree, ins, values, operands);
         root = MVM_jit_expr_apply_template(tc, tree, template, operands);
