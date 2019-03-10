@@ -12,16 +12,13 @@
 # tools/sort-expr-templates-by-oplist-order.p6 to sort it in the same order as
 # the oplist.
 
+
 (template: const_i16 (copy $1))
 (template: const_i64 (copy $1))
 (template: const_n64 (copy $1))
 (template: const_s (^cu_string $1))
 
 (template: set (copy $1))
-
-(template: trunc_i8 (ucast $1 int_sz 1))
-(template: trunc_i16 (ucast $1 int_sz 2))
-(template: trunc_i32 (ucast $1 int_sz 4))
 
 (template: extend_u8  (ucast $1 int_sz 1))
 (template: extend_u16 (ucast $1 int_sz 2))
@@ -30,6 +27,10 @@
 (template: extend_i8  (scast $1 int_sz 1))
 (template: extend_i16 (scast $1 int_sz 2))
 (template: extend_i32 (scast $1 int_sz 4))
+
+(template: trunc_i8 (ucast $1 int_sz 1))
+(template: trunc_i16 (ucast $1 int_sz 2))
+(template: trunc_i32 (ucast $1 int_sz 4))
 
 
 (template: goto (branch $0))
@@ -823,14 +824,6 @@
     (arglist
       (carg (tc) ptr)
       (carg $1 ptr)) ptr_sz))
-
-(template: unbox_u
-  (call (^getf (^repr $1) MVMREPROps box_funcs.get_uint)
-    (arglist
-      (carg (tc) ptr)
-      (carg (^stable $1) ptr)
-      (carg $1 ptr)
-      (carg (^body $1) ptr)) int_sz))
 
 (template: atpos_i!
   (callv (^getf (^repr $1) MVMREPROps pos_funcs.at_pos)
@@ -2276,6 +2269,14 @@
         (^zero)))
     (^zero)))
 
+(template: unbox_u
+  (call (^getf (^repr $1) MVMREPROps box_funcs.get_uint)
+    (arglist
+      (carg (tc) ptr)
+      (carg (^stable $1) ptr)
+      (carg $1 ptr)
+      (carg (^body $1) ptr)) int_sz))
+
 (template: coerce_iu  (copy $1))
 
 (template: coerce_ui  (copy $1))
@@ -2299,6 +2300,14 @@
         (carg $0 ptr)
         (carg $1 ptr)))))
 
+(template: decodertakeallchars
+  (do
+    (^decoder_ensure_decoder $1 "decodertakeallchars")
+    (call (^func &MVM_decoder_take_all_chars)
+      (arglist
+        (carg (tc) ptr)
+        (carg $1 ptr)) ptr_sz)))
+
 (template: decodertakeline
   (do
     (^decoder_ensure_decoder $1 "decodertakeline")
@@ -2308,14 +2317,6 @@
         (carg $1 ptr)
         (carg $2 int)
         (carg $3 int)) ptr_sz)))
-
-(template: decodertakeallchars
-  (do
-    (^decoder_ensure_decoder $1 "decodertakeallchars")
-    (call (^func &MVM_decoder_take_all_chars)
-      (arglist
-        (carg (tc) ptr)
-        (carg $1 ptr)) ptr_sz)))
 
 (template: decodertakebytes
   (do

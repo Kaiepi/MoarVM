@@ -11,3 +11,11 @@ MVMuint32 MVM_platform_cpu_count(void) {
 
     return count;
 }
+
+MVMuint64 MVM_platform_free_memory(void) {
+    return uv_get_free_memory();
+}
+
+MVMuint64 MVM_platform_total_memory(void) {
+    return uv_get_total_memory();
+}
