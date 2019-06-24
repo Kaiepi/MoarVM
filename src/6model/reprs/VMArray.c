@@ -469,6 +469,9 @@ static void set_elems(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void
 }
 
 static void push(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data, MVMRegister value, MVMuint16 kind) {
+    if (!IS_CONCRETE(root))
+        MVM_exception_throw_adhoc(tc, "MVMArray: push expected a concrete object with MVMArray representation");
+
     MVMArrayBody     *body      = (MVMArrayBody *)data;
     MVMArrayREPRData *repr_data = (MVMArrayREPRData *)st->REPR_data;
     enter_single_user(tc, body);
