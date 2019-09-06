@@ -532,39 +532,48 @@ static const MVMIOOps op_table = {
 };
 
 static void push_name_and_port(MVMThreadContext *tc, struct sockaddr_storage *name, MVMObject *arr) {
-    char addrstr[INET6_ADDRSTRLEN + 1];
+    char      addrstr[INET6_ADDRSTRLEN + 1];
     /* XXX windows support kludge. 64 bit is much too big, but we'll
      * get the proper data from the struct anyway, however windows
      * decides to declare it. */
     MVMuint64 port;
-    MVMObject *host_o;
-    MVMObject *port_o;
+
+    if (name == NULL)
+        goto error;
+
     switch (name->ss_family) {
         case AF_INET6: {
-            uv_ip6_name((struct sockaddr_in6*)name, addrstr, INET6_ADDRSTRLEN + 1);
-            port = ntohs(((struct sockaddr_in6*)name)->sin6_port);
-            break;
+            struct sockaddr_in6 *addr = (struct sockaddr_in6 *)name;
+            uv_ip6_name(addr, addrstr, INET6_ADDRSTRLEN + 1);
+            port = ntohs(addr->sin6_port);
+            goto success;
         }
         case AF_INET: {
-            uv_ip4_name((struct sockaddr_in*)name, addrstr, INET6_ADDRSTRLEN + 1);
-            port = ntohs(((struct sockaddr_in*)name)->sin_port);
-            break;
+            struct sockaddr_in *addr = (struct sockaddr_in *)name;
+            uv_ip4_name(addr, addrstr, INET6_ADDRSTRLEN + 1);
+            port = ntohs(addr->sin_port);
+            goto success;
         }
         default:
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
-            return;
-            break;
+            goto error;
     }
+
+error:
+    MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+    MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
+    return;
+
+success:
     MVMROOT(tc, arr, {
-        port_o = MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, port);
+        MVMObject *port_o = MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, port);
         MVMROOT(tc, port_o, {
-            host_o = (MVMObject *)MVM_repr_box_str(tc, tc->instance->boot_types.BOOTStr,
+            MVMObject *host_o = (MVMObject *)MVM_repr_box_str(tc, tc->instance->boot_types.BOOTStr,
                     MVM_string_ascii_decode_nt(tc, tc->instance->VMString, addrstr));
+            MVM_repr_push_o(tc, arr, host_o);
         });
+        MVM_repr_push_o(tc, arr, port_o);
     });
-    MVM_repr_push_o(tc, arr, host_o);
-    MVM_repr_push_o(tc, arr, port_o);
+    return;
 }
 
 /* Info we convey about a connection attempt task. */
