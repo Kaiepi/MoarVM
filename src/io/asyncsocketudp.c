@@ -267,7 +267,7 @@ static void on_write(uv_udp_send_t *req, int status) {
     MVMObject        *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
     MVMAsyncTask     *t   = MVM_io_eventloop_get_active_work(tc, wi->work_idx);
     MVM_repr_push_o(tc, arr, t->body.schedulee);
-    if (status >= 0) {
+    if (status == 0) {
         MVMROOT2(tc, arr, t, {
             MVMObject *bytes_box = MVM_repr_box_int(tc,
                 tc->instance->boot_types.BOOTInt,
@@ -321,7 +321,7 @@ static void write_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
         MVM_exception_throw_adhoc(tc, "cannot send over a closed socket");
 
     for (record = wi->dest_addr; record != NULL; record = record->ai_next) {
-        if ((wi->error = uv_udp_send(wi->req, handle, &(wi->buf), 1, record->ai_addr, on_write)) >= 0)
+        if ((wi->error = uv_udp_send(wi->req, handle, &(wi->buf), 1, record->ai_addr, on_write)) == 0)
             break;
     }
 
@@ -511,17 +511,17 @@ static void do_setup_setup(uv_handle_t *handle) {
 
     if (ssi->bind_addr == NULL) {
         ssi->error = uv_udp_init(ssi->loop, ssi->handle);
-        if (ssi->error >= 0 && (ssi->flags & 1))
+        if (ssi->error == 0 && (ssi->flags & 1))
             ssi->error = uv_udp_set_broadcast(ssi->handle, 1);
     } else {
         for (record = ssi->bind_addr; record != NULL; record = record->ai_next) {
-            if ((ssi->error = uv_udp_init(ssi->loop, ssi->handle)) >= 0) {
+            if ((ssi->error = uv_udp_init(ssi->loop, ssi->handle)) == 0) {
                 ssi->error = uv_udp_bind(ssi->handle, record->ai_addr, 0);
-                if (ssi->error >= 0 && (ssi->flags & 1))
+                if (ssi->error == 0 && (ssi->flags & 1))
                     ssi->error = uv_udp_set_broadcast(ssi->handle, 1);
             }
 
-            if (ssi->error >= 0)
+            if (ssi->error == 0)
                 break;
             else {
                 struct addrinfo *next = record->ai_next;
@@ -539,7 +539,7 @@ static void do_setup_setup(uv_handle_t *handle) {
         }
     }
 
-    if (ssi->error >= 0) {
+    if (ssi->error == 0) {
         /* UDP handle initialized; wrap it up in an I/O handle and send. */
         MVMAsyncTask *t   = (MVMAsyncTask *)ssi->async_task;
         MVMObject    *arr;
