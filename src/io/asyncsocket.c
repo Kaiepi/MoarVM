@@ -259,102 +259,125 @@ typedef struct {
 
 /* Completion handler for an asynchronous write. */
 static void on_write(uv_write_t *req, int status) {
-    WriteInfo        *wi  = (WriteInfo *)req->data;
-    MVMThreadContext *tc  = wi->tc;
-    MVMObject        *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-    MVMAsyncTask     *t   = MVM_io_eventloop_get_active_work(tc, wi->work_idx);
-    MVM_repr_push_o(tc, arr, t->body.schedulee);
-    if (status == 0) {
-        MVMROOT2(tc, arr, t, {
-            MVMObject *bytes_box = MVM_repr_box_int(tc,
-                tc->instance->boot_types.BOOTInt,
-                wi->buf.len);
-            MVM_repr_push_o(tc, arr, bytes_box);
-        });
-        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-    }
-    else {
-        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
-        MVMROOT2(tc, arr, t, {
-            MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
-                tc->instance->VMString, uv_strerror(status));
-            MVMObject *msg_box = MVM_repr_box_str(tc,
-                tc->instance->boot_types.BOOTStr, msg_str);
-            MVM_repr_push_o(tc, arr, msg_box);
-        });
-    }
-    MVM_repr_push_o(tc, t->body.queue, arr);
+    WriteInfo        *wi = (WriteInfo *)req->data;
+    MVMThreadContext *tc = wi->tc;
+    MVMAsyncTask     *t  = MVM_io_eventloop_get_active_work(tc, wi->work_idx);
+    MVMROOT3(tc, t, wi->handle, wi->buf_data, {
+        MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVM_repr_push_o(tc, arr, t->body.schedulee);
+        if (status == 0) {
+            /* Success; push write length. */
+            MVMROOT(tc, arr, {
+                MVMObject *bytes_box = MVM_repr_box_int(tc,
+                    tc->instance->boot_types.BOOTInt,
+                    wi->buf.len);
+                MVM_repr_push_o(tc, arr, bytes_box);
+            });
+            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+        }
+        else {
+            /* Error; need to notify. */
+            printf("error finishing write: %s\n", uv_strerror(status));
+            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
+            MVMROOT(tc, arr, {
+                MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
+                    tc->instance->VMString, uv_strerror(status));
+                MVMObject *msg_box = MVM_repr_box_str(tc,
+                    tc->instance->boot_types.BOOTStr, msg_str);
+                MVM_repr_push_o(tc, arr, msg_box);
+            });
+        }
+        MVM_repr_push_o(tc, t->body.queue, arr);
+    });
     MVM_io_eventloop_remove_active_work(tc, &(wi->work_idx));
 }
 
 /* Does setup work for an asynchronous write. */
 static void write_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
-    MVMIOAsyncSocketData *handle_data;
+    WriteInfo            *wi           = (WriteInfo *)data;
+    MVMIOAsyncSocketData *handle_data  = (MVMIOAsyncSocketData *)wi->handle->body.data;
+    uv_handle_t          *handle;
     MVMArray             *buffer;
-    WriteInfo            *wi;
     char                 *output;
-    int                   output_size, r;
-
-    /* Ensure not closed. */
-    wi = (WriteInfo *)data;
-    handle_data = (MVMIOAsyncSocketData *)wi->handle->body.data;
-    if (handle_data->handle == NULL || uv_is_closing((uv_handle_t *)handle_data->handle)) {
-        MVMROOT(tc, async_task, {
-            MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-            MVMAsyncTask *t   = (MVMAsyncTask *)async_task;
-            MVM_repr_push_o(tc, arr, t->body.schedulee);
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
-            MVMROOT(tc, arr, {
-                MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
-                    tc->instance->VMString, "Cannot write to a closed socket");
-                MVMObject *msg_box = MVM_repr_box_str(tc,
-                    tc->instance->boot_types.BOOTStr, msg_str);
-                MVM_repr_push_o(tc, arr, msg_box);
-            });
-            MVM_repr_push_o(tc, t->body.queue, arr);
-        });
-        return;
-    }
+    int                   output_size;
+    int                   r;
 
     /* Add to work in progress. */
-    wi->tc = tc;
+    wi->tc       = tc;
     wi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
 
     /* Extract buf data. */
-    buffer = (MVMArray *)wi->buf_data;
-    output = (char *)(buffer->body.slots.i8 + buffer->body.start);
+    buffer      = (MVMArray *)wi->buf_data;
+    output      = (char *)(buffer->body.slots.i8 + buffer->body.start);
     output_size = (int)buffer->body.elems;
 
     /* Create and initialize write request. */
-    wi->req           = MVM_malloc(sizeof(uv_write_t));
-    wi->buf           = uv_buf_init(output, output_size);
-    wi->req->data     = data;
+    wi->req       = MVM_malloc(sizeof(uv_write_t));
+    wi->req->data = data;
+    wi->buf       = uv_buf_init(output, output_size);
 
-    if ((r = uv_write(wi->req, handle_data->handle, &(wi->buf), 1, on_write)) != 0) {
-        /* Error; need to notify. */
-        MVMROOT(tc, async_task, {
-            MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-            MVMAsyncTask *t   = (MVMAsyncTask *)async_task;
-            MVM_repr_push_o(tc, arr, t->body.schedulee);
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
-            MVMROOT(tc, arr, {
-                MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
-                    tc->instance->VMString, uv_strerror(r));
-                MVMObject *msg_box = MVM_repr_box_str(tc,
-                    tc->instance->boot_types.BOOTStr, msg_str);
-                MVM_repr_push_o(tc, arr, msg_box);
-            });
-            MVM_repr_push_o(tc, t->body.queue, arr);
+    /* Ensure not closed. */
+    if (handle_data->handle == NULL)
+        goto closed;
+
+    /* Get our handle. */
+    handle = (uv_handle_t *)handle_data->handle;
+
+    /* Ensure not closed. */
+    if (uv_is_closing(handle))
+        goto closed;
+
+    /* Do our write. */
+    if ((r = uv_write(wi->req, handle_data->handle, &(wi->buf), 1, on_write)) != 0)
+        goto error;
+
+    /* Finish up in on_write. */
+    return;
+
+closed:
+    /* Handle closed; need to notify. */
+    MVMROOT3(tc, async_task, wi->handle, wi->buf_data, {
+        MVMAsyncTask *t   = (MVMAsyncTask *)async_task;
+        MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVM_repr_push_o(tc, arr, t->body.schedulee);
+        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
+        MVMROOT(tc, arr, {
+            MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
+                tc->instance->VMString, "Cannot write to a closed socket");
+            MVMObject *msg_box = MVM_repr_box_str(tc,
+                tc->instance->boot_types.BOOTStr, msg_str);
+            MVM_repr_push_o(tc, arr, msg_box);
         });
+        MVM_repr_push_o(tc, t->body.queue, arr);
+    });
+    MVM_io_eventloop_remove_active_work(tc, &(wi->work_idx));
+    return;
 
-        /* Cleanup handle. */
-        if (handle_data->handle != NULL && !uv_is_closing((uv_handle_t *)handle_data->handle)) {
-            handle_data->handle = NULL;
-            uv_close((uv_handle_t *)handle_data->handle, free_on_close_cb);
-        }
+error:
+    /* Error; need to notify. */
+    MVMROOT3(tc, async_task, wi->handle, wi->buf_data, {
+        MVMAsyncTask *t   = (MVMAsyncTask *)async_task;
+        MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVM_repr_push_o(tc, arr, t->body.schedulee);
+        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
+        MVMROOT(tc, arr, {
+            MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
+                tc->instance->VMString, uv_strerror(r));
+            MVMObject *msg_box = MVM_repr_box_str(tc,
+                tc->instance->boot_types.BOOTStr, msg_str);
+            MVM_repr_push_o(tc, arr, msg_box);
+        });
+        MVM_repr_push_o(tc, t->body.queue, arr);
+    });
 
-        MVM_io_eventloop_remove_active_work(tc, &(wi->work_idx));
+    /* Clean up our handle. */
+    if (handle != NULL && !uv_is_closing(handle)) {
+        handle_data->handle = NULL;
+        uv_close(handle, free_on_close_cb);
     }
+
+    MVM_io_eventloop_remove_active_work(tc, &(wi->work_idx));
+    return;
 }
 
 /* Marks objects for a write task. */
@@ -366,8 +389,12 @@ static void write_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *workl
 
 /* Frees info for a write task. */
 static void write_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
-    if (data)
+    if (data != NULL) {
+        WriteInfo *wi = (WriteInfo *)data;
+        if (wi->req != NULL)
+            MVM_free_null(wi->req);
         MVM_free(data);
+    }
 }
 
 /* Operations table for async write task. */
@@ -382,7 +409,6 @@ static const MVMAsyncTaskOps write_op_table = {
 static MVMAsyncTask * write_bytes(MVMThreadContext *tc, MVMOSHandle *h, MVMObject *queue,
                                   MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type) {
     MVMAsyncTask *task;
-    WriteInfo    *wi;
 
     /* Validate REPRs. */
     if (REPR(queue)->ID != MVM_REPR_ID_ConcBlockingQueue)
@@ -397,21 +423,20 @@ static MVMAsyncTask * write_bytes(MVMThreadContext *tc, MVMOSHandle *h, MVMObjec
         && ((MVMArrayREPRData *)STABLE(buffer)->REPR_data)->slot_type != MVM_ARRAY_I8)
         MVM_exception_throw_adhoc(tc, "asyncwritebytes requires a native array of uint8 or int8");
 
-    /* Create async task handle. */
-    MVMROOT4(tc, queue, schedulee, h, buffer, {
-        task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
-    });
-    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
-    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
-    task->body.ops  = &write_op_table;
-    wi              = MVM_calloc(1, sizeof(WriteInfo));
-    MVM_ASSIGN_REF(tc, &(task->common.header), wi->handle, h);
-    MVM_ASSIGN_REF(tc, &(task->common.header), wi->buf_data, buffer);
-    task->body.data = wi;
-
-    /* Hand the task off to the event loop. */
-    MVMROOT(tc, task, {
-        MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
+    MVMROOT5(tc, h, queue, schedulee, buffer, async_type, {
+        /* Create async task handle. */
+        WriteInfo *wi   = MVM_calloc(1, sizeof(WriteInfo));
+        task            = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
+        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
+        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
+        MVM_ASSIGN_REF(tc, &(task->common.header), wi->handle, h);
+        MVM_ASSIGN_REF(tc, &(task->common.header), wi->buf_data, buffer);
+        task->body.data = wi;
+        task->body.ops  = &write_op_table;
+        MVMROOT(tc, task, {
+            /* Hand the task off to the event loop. */
+            MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
+        });
     });
 
     return task;
@@ -441,7 +466,7 @@ static void close_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *workl
 
 /* Frees info for a close task. */
 static void close_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
-    if (data)
+    if (data != NULL)
         MVM_free(data);
 }
 
@@ -455,19 +480,14 @@ static const MVMAsyncTaskOps close_op_table = {
 };
 
 static MVMint64 close_socket(MVMThreadContext *tc, MVMOSHandle *h) {
-    MVMAsyncTask *task;
-    CloseInfo *ci;
-
     MVMROOT(tc, h, {
-        task = (MVMAsyncTask *)MVM_repr_alloc_init(tc,
-            tc->instance->boot_types.BOOTAsync);
+        MVMAsyncTask *task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAsync);
+        CloseInfo    *ci   = MVM_calloc(1, sizeof(CloseInfo));
+        MVM_ASSIGN_REF(tc, &(task->common.header), ci->handle, h);
+        task->body.data    = ci;
+        task->body.ops     = &close_op_table;
+        MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
     });
-    task->body.ops = &close_op_table;
-    ci = MVM_calloc(1, sizeof(CloseInfo));
-    MVM_ASSIGN_REF(tc, &(task->common.header), ci->handle, h);
-    task->body.data = ci;
-    MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
-
     return 0;
 }
 
