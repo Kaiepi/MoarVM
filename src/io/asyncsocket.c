@@ -34,7 +34,7 @@ static void on_read(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf) {
     MVMAsyncTask     *t   = MVM_io_eventloop_get_active_work(tc, ri->work_idx);
 
     if (nread >= 0) {
-        MVMROOT(tc, t, {
+        MVMROOT3(tc, t, ri->handle, ri->buf_type, {
             MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
             MVM_repr_push_o(tc, arr, t->body.schedulee);
             MVMROOT(tc, arr, {
@@ -62,36 +62,33 @@ static void on_read(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf) {
         MVMIOAsyncSocketData *handle_data = (MVMIOAsyncSocketData *)ri->handle->body.data;
         uv_handle_t          *conn_handle = (uv_handle_t *)handle_data->handle;
 
-        if (nread == UV_EOF) {
-            MVMROOT(tc, t, {
-                MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-                MVM_repr_push_o(tc, arr, t->body.schedulee);
-                MVMROOT2(tc, t, arr, {
+        MVMROOT3(tc, t, ri->handle, ri->buf_type, {
+            MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+            MVM_repr_push_o(tc, arr, t->body.schedulee);
+            if (nread == UV_EOF) {
+                /* End of file; push read count. */
+                MVMROOT(tc, arr, {
                     MVMObject *final = MVM_repr_box_int(tc,
                         tc->instance->boot_types.BOOTInt, ri->seq_number);
                     MVM_repr_push_o(tc, arr, final);
-                    MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-                    MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
                 });
-                MVM_repr_push_o(tc, t->body.queue, arr);
-            });
-        }
-        else {
-            MVMROOT(tc, t, {
-                MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-                MVM_repr_push_o(tc, arr, t->body.schedulee);
+                MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+                MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+            }
+            else {
+                /* Error; need to notify. */
                 MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
                 MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-                MVMROOT2(tc, t, arr, {
+                MVMROOT(tc, arr, {
                     MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
                         tc->instance->VMString, uv_strerror(nread));
                     MVMObject *msg_box = MVM_repr_box_str(tc,
                         tc->instance->boot_types.BOOTStr, msg_str);
                     MVM_repr_push_o(tc, arr, msg_box);
                 });
-                MVM_repr_push_o(tc, t->body.queue, arr);
-            });
-        }
+            }
+            MVM_repr_push_o(tc, t->body.queue, arr);
+        });
 
         /* Clean up. */
         if (buf->base)
@@ -107,56 +104,72 @@ static void on_read(uv_stream_t *handle, ssize_t nread, const uv_buf_t *buf) {
 
 /* Does setup work for setting up asynchronous reads. */
 static void read_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
-    MVMIOAsyncSocketData *handle_data;
-    ReadInfo             *ri;
+    ReadInfo             *ri          = (ReadInfo *)data;
+    MVMIOAsyncSocketData *handle_data = (MVMIOAsyncSocketData *)ri->handle->body.data;
+    uv_handle_t          *handle;
     int                   r;
 
-    /* Ensure not closed. */
-    ri = (ReadInfo *)data;
-    handle_data = (MVMIOAsyncSocketData *)ri->handle->body.data;
-    if (!handle_data->handle || uv_is_closing((uv_handle_t *)handle_data->handle)) {
-        /* Closed, so immediately send done. */
-        MVMAsyncTask *t = (MVMAsyncTask *)async_task;
-        MVMROOT(tc, t, {
-            MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-            MVM_repr_push_o(tc, arr, t->body.schedulee);
-            MVMROOT(tc, arr, {
-                MVMObject *final = MVM_repr_box_int(tc,
-                    tc->instance->boot_types.BOOTInt, ri->seq_number);
-                MVM_repr_push_o(tc, arr, final);
-            });
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-            MVM_repr_push_o(tc, t->body.queue, arr);
-        });
-        return;
-    }
-
     /* Add to work in progress. */
-    ri->tc        = tc;
-    ri->work_idx  = MVM_io_eventloop_add_active_work(tc, async_task);
+    ri->tc       = tc;
+    ri->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
+
+    /* Ensure not closed. */
+    if (handle_data->handle == NULL)
+        goto closed;
+
+    /* Get our handle; set its data so we can access the ReadInfo struct in
+     * on_read. */
+    handle       = (uv_handle_t *)handle_data->handle;
+    handle->data = data;
+
+    /* Ensure not closed. */
+    if (uv_is_closing(handle))
+        goto closed;
 
     /* Start reading the stream. */
-    handle_data->handle->data = data;
-    if ((r = uv_read_start(handle_data->handle, on_alloc, on_read)) != 0) {
-        /* Error; need to notify. */
-        MVMROOT(tc, async_task, {
-            MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-            MVMAsyncTask *t   = (MVMAsyncTask *)async_task;
-            MVM_repr_push_o(tc, arr, t->body.schedulee);
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
-            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-            MVMROOT(tc, arr, {
-                MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
-                    tc->instance->VMString, uv_strerror(r));
-                MVMObject *msg_box = MVM_repr_box_str(tc,
-                    tc->instance->boot_types.BOOTStr, msg_str);
-                MVM_repr_push_o(tc, arr, msg_box);
-            });
-            MVM_repr_push_o(tc, t->body.queue, arr);
+    if ((r = uv_read_start(handle_data->handle, on_alloc, on_read)) != 0)
+        goto error;
+
+    /* Success; finish up in on_read. */
+    return;
+
+closed:
+    /* Closed, so immediately send done. */
+    MVMROOT3(tc, async_task, ri->handle, ri->buf_type, {
+        MVMAsyncTask *t   = (MVMAsyncTask *)async_task;
+        MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVM_repr_push_o(tc, arr, t->body.schedulee);
+        MVMROOT(tc, arr, {
+            MVMObject *final = MVM_repr_box_int(tc,
+                tc->instance->boot_types.BOOTInt, ri->seq_number);
+            MVM_repr_push_o(tc, arr, final);
         });
-        MVM_io_eventloop_remove_active_work(tc, &(ri->work_idx));
-    }
+        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+        MVM_repr_push_o(tc, t->body.queue, arr);
+    });
+    MVM_io_eventloop_remove_active_work(tc, &(ri->work_idx));
+    return;
+
+error:
+    /* Error; need to notify. */
+    MVMROOT3(tc, async_task, ri->handle, ri->buf_type, {
+        MVMAsyncTask *t   = (MVMAsyncTask *)async_task;
+        MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVM_repr_push_o(tc, arr, t->body.schedulee);
+        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTInt);
+        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+        MVMROOT(tc, arr, {
+            MVMString *msg_str = MVM_string_ascii_decode_nt(tc,
+                tc->instance->VMString, uv_strerror(r));
+            MVMObject *msg_box = MVM_repr_box_str(tc,
+                tc->instance->boot_types.BOOTStr, msg_str);
+            MVM_repr_push_o(tc, arr, msg_box);
+        });
+        MVM_repr_push_o(tc, t->body.queue, arr);
+    });
+    MVM_io_eventloop_remove_active_work(tc, &(ri->work_idx));
+    return;
 }
 
 /* Stops reading. */
@@ -164,7 +177,8 @@ static void read_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
     ReadInfo *ri = (ReadInfo *)data;
     if (ri->work_idx >= 0) {
         MVMIOAsyncSocketData *handle_data = (MVMIOAsyncSocketData *)ri->handle->body.data;
-        if (handle_data->handle && !uv_is_closing((uv_handle_t *)handle_data->handle))
+        uv_handle_t          *handle      = (uv_handle_t *)handle_data->handle;
+        if (handle != NULL && !uv_is_closing(handle))
             uv_read_stop(handle_data->handle);
         MVM_io_eventloop_remove_active_work(tc, &(ri->work_idx));
     }
@@ -179,7 +193,7 @@ static void read_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *workli
 
 /* Frees info for a read task. */
 static void read_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
-    if (data)
+    if (data != NULL)
         MVM_free(data);
 }
 
@@ -195,7 +209,6 @@ static const MVMAsyncTaskOps read_op_table = {
 static MVMAsyncTask * read_bytes(MVMThreadContext *tc, MVMOSHandle *h, MVMObject *queue,
                                  MVMObject *schedulee, MVMObject *buf_type, MVMObject *async_type) {
     MVMAsyncTask *task;
-    ReadInfo     *ri;
 
     /* Validate REPRs. */
     if (REPR(queue)->ID != MVM_REPR_ID_ConcBlockingQueue)
@@ -215,20 +228,20 @@ static MVMAsyncTask * read_bytes(MVMThreadContext *tc, MVMOSHandle *h, MVMObject
     }
 
     /* Create async task handle. */
-    MVMROOT4(tc, queue, schedulee, h, buf_type, {
-        task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
-    });
-    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
-    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
-    task->body.ops  = &read_op_table;
-    ri              = MVM_calloc(1, sizeof(ReadInfo));
-    MVM_ASSIGN_REF(tc, &(task->common.header), ri->buf_type, buf_type);
-    MVM_ASSIGN_REF(tc, &(task->common.header), ri->handle, h);
-    task->body.data = ri;
+    MVMROOT5(tc, h, queue, schedulee, buf_type, async_type, {
+        ReadInfo *ri    = MVM_calloc(1, sizeof(ReadInfo));
+        task            = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
+        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
+        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
+        MVM_ASSIGN_REF(tc, &(task->common.header), ri->buf_type, buf_type);
+        MVM_ASSIGN_REF(tc, &(task->common.header), ri->handle, h);
+        task->body.data = ri;
+        task->body.ops  = &read_op_table;
 
-    /* Hand the task off to the event loop. */
-    MVMROOT(tc, task, {
-        MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
+        /* Hand the task off to the event loop. */
+        MVMROOT(tc, task, {
+            MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
+        });
     });
 
     return task;
