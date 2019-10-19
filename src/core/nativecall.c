@@ -317,6 +317,7 @@ char * MVM_nativecall_unmarshal_string(MVMThreadContext *tc, MVMObject *value, M
     }
 }
 
+MVM_NO_RETURN static void unmarshal_error(MVMThreadContext *tc, char *desired_repr, MVMObject *value, MVMint16 unmarshal_kind) MVM_NO_RETURN_ATTRIBUTE;
 static void unmarshal_error(MVMThreadContext *tc, char *desired_repr, MVMObject *value, MVMint16 unmarshal_kind) {
     if (unmarshal_kind == MVM_NATIVECALL_UNMARSHAL_KIND_GENERIC) {
         MVM_exception_throw_adhoc(tc,

@@ -732,6 +732,7 @@ static MVMint32 select_live_range_for_spill(MVMThreadContext *tc, RegisterAlloca
             return alc->active[i];
     }
     assert(0);
+    return -1; /* Shut Clang up. */
 }
 
 
