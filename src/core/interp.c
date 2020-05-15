@@ -5721,6 +5721,46 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 2;
                 goto NEXT;
             }
+            OP(getaddrinfo):
+                GET_REG(cur_op, 0).o = MVM_address_resolve_sync(tc,
+                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64,
+                    GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64, GET_REG(cur_op, 10).i64,
+                    GET_REG(cur_op, 12).i64);
+                cur_op += 14;
+                goto NEXT;
+            OP(addrfamily): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
+                    GET_REG(cur_op, 0).i64 = MVM_address_family(tc, (MVMAddress *)address);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrfamily requires a concrete object with REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                cur_op += 4;
+                goto NEXT;
+            }
+            OP(addrtype): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
+                    GET_REG(cur_op, 0).i64 = MVM_address_type(tc, (MVMAddress *)address);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtype requires a concrete object with REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                cur_op += 4;
+                goto NEXT;
+            }
+            OP(addrprotocol): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
+                    GET_REG(cur_op, 0).i64 = MVM_address_protocol(tc, (MVMAddress *)address);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrprotocol requires a concrete object with REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                cur_op += 4;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;
