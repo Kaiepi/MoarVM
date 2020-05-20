@@ -889,6 +889,8 @@ getaddrinfo         w(obj) r(str) r(int64) r(int64) r(int64) r(int64) r(int64)
 addrfamily          w(int64) r(obj) :pure
 addrtype            w(int64) r(obj) :pure
 addrprotocol        w(int64) r(obj) :pure
+addrfrompres        w(obj) r(str) r(int64) r(int64) r(int64) r(int64) :pure
+addrtopres          w(str) r(obj) :pure
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.

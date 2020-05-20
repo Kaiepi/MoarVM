@@ -2,6 +2,11 @@ MVMint64 MVM_address_family(MVMThreadContext *tc, MVMAddress *address);
 MVMint64 MVM_address_type(MVMThreadContext *tc, MVMAddress *address);
 MVMint64 MVM_address_protocol(MVMThreadContext *tc, MVMAddress *address);
 
+MVMObject * MVM_address_from_presentation(MVMThreadContext *tc,
+        MVMString *presentation, MVMint64 port,
+        MVMint64 family, MVMint64 type, MVMint64 protocol);
+MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *address);
+
 MVMObject * MVM_address_resolve_sync(MVMThreadContext *tc,
         MVMString *host, MVMint64 port,
         MVMint64 family, MVMint64 type, MVMint64 protocol,
