@@ -120,123 +120,121 @@ MVMint64 MVM_address_protocol(MVMThreadContext *tc, MVMAddress *address) {
     return address->body.protocol;
 }
 
-MVMObject * MVM_address_from_presentation(MVMThreadContext *tc,
+MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
         MVMString *presentation, MVMint64 port,
-        MVMint64 family, MVMint64 type, MVMint64 protocol) {
-    MVMAddress *address;
+        MVMint64 type, MVMint64 protocol) {
+    MVMAddress     *address;
+    struct in_addr  native_address;
+    char           *ip;
+    int             result;
 
-    switch (family) {
-        case MVM_SOCKET_FAMILY_INET: {
-            struct in_addr  native_address;
-            char           *ip;
-            int             result;
+    ip     = MVM_string_utf8_encode_C_string(tc, presentation);
+    result = inet_pton(AF_INET, ip, &native_address);
+    if (result == 0) {
+        char *waste[] = { ip, NULL };
+        MVM_exception_throw_adhoc_free(tc, waste,
+            "Failed to create an IPv4 address from its presentation format (%s): no parse", ip);
+    }
+    else if (result == -1) {
+        char *waste[] = { ip, NULL };
+        MVM_exception_throw_adhoc_free(tc, waste,
+            "Failed to create an IPv4 address from its presentation format (%s): %s", ip, strerror(errno));
+    }
+    else {
+        MVMROOT(tc, presentation, {
+            struct sockaddr_in socket_address;
+            memset(&socket_address, 0, sizeof(socket_address));
+            socket_address.sin_len    = sizeof(socket_address);
+            socket_address.sin_family = AF_INET;
+            socket_address.sin_port   = (int)port;
+            memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
 
-            ip     = MVM_string_utf8_encode_C_string(tc, presentation);
-            result = inet_pton(AF_INET, ip, &native_address);
-            if (result == 0) {
-                char *waste[] = { ip, NULL };
-                MVM_exception_throw_adhoc_free(tc, waste,
-                    "Failed to create an IPv4 address from its presentation format (%s): no parse", ip);
-            }
-            else if (result == -1) {
-                char *waste[] = { ip, NULL };
-                MVM_exception_throw_adhoc_free(tc, waste,
-                    "Failed to create an IPv4 address from its presentation format (%s): %s", ip, strerror(errno));
-            }
-            else {
-                MVMROOT(tc, presentation, {
-                    struct sockaddr_in socket_address;
-                    memset(&socket_address, 0, sizeof(socket_address));
-                    socket_address.sin_len    = sizeof(socket_address);
-                    socket_address.sin_family = AF_INET;
-                    socket_address.sin_port   = (int)port;
-                    memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
-
-                    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-                    memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
-                    address->body.family   = family;
-                    address->body.type     = type;
-                    address->body.protocol = protocol;
-                });
-            }
-
-            break;
-        }
-        case MVM_SOCKET_FAMILY_INET6: {
-            struct in6_addr  native_address;
-            char            *ip;
-            int              result;
-
-            ip     = MVM_string_utf8_encode_C_string(tc, presentation);
-            result = inet_pton(AF_INET6, ip, &native_address);
-            if (result == 0) {
-                char *waste[] = { ip, NULL };
-                MVM_exception_throw_adhoc_free(tc, waste,
-                    "Failed to create an IPv6 address from its presentation format (%s): no parse", ip);
-            }
-            else if (result == -1) {
-                char *waste[] = { ip, NULL };
-                MVM_exception_throw_adhoc_free(tc, waste,
-                    "Failed to create an IPv6 address from its presentation format (%s): %s", ip, strerror(errno));
-            }
-            else {
-                MVMROOT(tc, presentation, {
-                    struct sockaddr_in6 socket_address;
-                    memset(&socket_address, 0, sizeof(socket_address));
-                    socket_address.sin6_len    = sizeof(socket_address);
-                    socket_address.sin6_family = AF_INET6;
-                    socket_address.sin6_port   = (int)port;
-                    memcpy(&socket_address.sin6_addr, &native_address, sizeof(native_address));
-
-                    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-                    memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
-                    address->body.family   = family;
-                    address->body.type     = type;
-                    address->body.protocol = protocol;
-                });
-            }
-
-            break;
-        }
-        case MVM_SOCKET_FAMILY_UNIX: {
-#if defined(_WIN32) || !defined(AF_UNIX)
-            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
-#else
-            char   *path    = MVM_string_utf8_encode_C_string(tc, presentation);
-            size_t  sun_len = strnlen(path, MAX_SUN_LEN);
-
-            if (sun_len >= MAX_SUN_LEN) {
-                char *waste[] = { path, NULL };
-                MVM_exception_throw_adhoc_free(
-                    tc, waste,
-                    "Socket path '%s' is too long (max length supported by this platform is %zu characters)",
-                    path, MAX_SUN_LEN - 1
-                );
-            } else {
-                struct sockaddr_un socket_address;
-
-                memset(&socket_address, 0, sizeof(socket_address));
-                socket_address.sun_family = AF_UNIX;
-                strcpy(socket_address.sun_path, path);
-                MVM_free(path);
-
-                MVMROOT(tc, presentation, {
-                    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-                    memcpy(&address->body.storage, &socket_address, SUN_LEN(&socket_address));
-                    address->body.family   = family;
-                    address->body.type     = type;
-                    address->body.protocol = protocol;
-                });
-            }
-#endif
-
-            break;
-        }
-        default:
-            MVM_exception_throw_adhoc(tc, "Cannot create an address from its presentation format for unknown address family %"PRIi64"", family);
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
+            address->body.family   = MVM_SOCKET_FAMILY_INET;
+            address->body.type     = type;
+            address->body.protocol = protocol;
+        });
     }
 
     return (MVMObject *)address;
+}
+
+MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
+        MVMString *presentation, MVMint64 port, MVMuint32 flowinfo, MVMuint32 scope_id,
+        MVMint64 type, MVMint64 protocol) {
+    MVMAddress      *address;
+    struct in6_addr  native_address;
+    char            *ip;
+    int              result;
+
+    ip     = MVM_string_utf8_encode_C_string(tc, presentation);
+    result = inet_pton(AF_INET6, ip, &native_address);
+    if (result == 0) {
+        char *waste[] = { ip, NULL };
+        MVM_exception_throw_adhoc_free(tc, waste,
+            "Failed to create an IPv6 address from its presentation format (%s): no parse", ip);
+    }
+    else if (result == -1) {
+        char *waste[] = { ip, NULL };
+        MVM_exception_throw_adhoc_free(tc, waste,
+            "Failed to create an IPv6 address from its presentation format (%s): %s", ip, strerror(errno));
+    }
+    else {
+        MVMROOT(tc, presentation, {
+            struct sockaddr_in6 socket_address;
+            memset(&socket_address, 0, sizeof(socket_address));
+            socket_address.sin6_len      = sizeof(socket_address);
+            socket_address.sin6_family   = AF_INET6;
+            socket_address.sin6_port     = (int)port;
+            socket_address.sin6_flowinfo = flowinfo;
+            memcpy(&socket_address.sin6_addr, &native_address, sizeof(native_address));
+            socket_address.sin6_scope_id = scope_id;
+
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
+            address->body.family   = MVM_SOCKET_FAMILY_INET6;
+            address->body.type     = type;
+            address->body.protocol = protocol;
+        });
+    }
+
+    return (MVMObject *)address;
+}
+
+MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path, MVMint64 type, MVMint64 protocol) {
+#if defined(_WIN32) || !defined(AF_UNIX)
+    MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#else
+    MVMAddress *address;
+    char       *path_cstr = MVM_string_utf8_encode_C_string(tc, path);
+    size_t      sun_len   = strnlen(path_cstr, MAX_SUN_LEN);
+
+    if (sun_len >= MAX_SUN_LEN) {
+        char *waste[] = { path_cstr, NULL };
+        MVM_exception_throw_adhoc_free(
+            tc, waste,
+            "Socket path '%s' is too long (max length supported by this platform is %zu characters)",
+            path_cstr, MAX_SUN_LEN - 1
+        );
+    } else {
+        struct sockaddr_un socket_address;
+        memset(&socket_address, 0, sizeof(socket_address));
+        socket_address.sun_family = AF_UNIX;
+        strcpy(socket_address.sun_path, path_cstr);
+        MVM_free(path_cstr);
+
+        MVMROOT(tc, path, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &socket_address, SUN_LEN(&socket_address));
+            address->body.family   = MVM_SOCKET_FAMILY_UNIX;
+            address->body.type     = type;
+            address->body.protocol = protocol;
+        });
+
+        return (MVMObject *)address;
+    }
+#endif
 }
 
 MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *address) {

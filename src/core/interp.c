@@ -5761,11 +5761,22 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 4;
                 goto NEXT;
             }
-            OP(addrfrompres):
-                GET_REG(cur_op, 0).o = MVM_address_from_presentation(tc,
+            OP(addrfromipv4):
+                GET_REG(cur_op, 0).o = MVM_address_from_ipv4_presentation(tc,
                     GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64,
-                    GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64, GET_REG(cur_op, 10).i64);
-                cur_op += 12;
+                    GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64);
+                cur_op += 10;
+                goto NEXT;
+            OP(addrfromipv6):
+                GET_REG(cur_op, 0).o = MVM_address_from_ipv6_presentation(tc,
+                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64, (MVMuint32)GET_REG(cur_op, 6).i64, (MVMuint32)GET_REG(cur_op, 8).i64,
+                    GET_REG(cur_op, 10).i64, GET_REG(cur_op, 12).i64);
+                cur_op += 14;
+                goto NEXT;
+            OP(addrfrompath):
+                GET_REG(cur_op, 0).o = MVM_address_from_path(tc,
+                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).i64);
+                cur_op += 8;
                 goto NEXT;
             OP(addrtopres): {
                 MVMObject *address = GET_REG(cur_op, 2).o;
