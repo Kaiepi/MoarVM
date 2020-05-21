@@ -108,12 +108,12 @@ static MVMint64 from_native_protocol(MVMThreadContext *tc, int protocol) {
     }
 }
 
-MVMint64 MVM_address_port(MVMThreadContext *tc, MVMAddress *address) {
+MVMuint16 MVM_address_port(MVMThreadContext *tc, MVMAddress *address) {
     switch (address->body.family) {
         case MVM_SOCKET_FAMILY_INET:
-            return ((struct sockaddr_in *)&address->body.storage)->sin_port;
+            return ntohs(((struct sockaddr_in *)&address->body.storage)->sin_port);
         case MVM_SOCKET_FAMILY_INET6:
-            return ((struct sockaddr_in6 *)&address->body.storage)->sin6_port;
+            return ntohs(((struct sockaddr_in6 *)&address->body.storage)->sin6_port);
         default:
             MVM_exception_throw_adhoc(tc, "Can only get the port of an IP address");
     }
@@ -121,14 +121,14 @@ MVMint64 MVM_address_port(MVMThreadContext *tc, MVMAddress *address) {
 
 MVMuint32 MVM_address_flowinfo(MVMThreadContext *tc, MVMAddress *address) {
     if (address->body.family == MVM_SOCKET_FAMILY_INET6)
-        return ((struct sockaddr_in6 *)&address->body.storage)->sin6_flowinfo;
+        return ntohl(((struct sockaddr_in6 *)&address->body.storage)->sin6_flowinfo);
     else
         MVM_exception_throw_adhoc(tc, "Can only get the flowinfo of an IPv6 address");
 }
 
 MVMuint32 MVM_address_scope_id(MVMThreadContext *tc, MVMAddress *address) {
     if (address->body.family == MVM_SOCKET_FAMILY_INET6)
-        return ((struct sockaddr_in6 *)&address->body.storage)->sin6_scope_id;
+        return ntohl(((struct sockaddr_in6 *)&address->body.storage)->sin6_scope_id);
     else
         MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
 }
@@ -146,7 +146,7 @@ MVMint64 MVM_address_protocol(MVMThreadContext *tc, MVMAddress *address) {
 }
 
 MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
-        MVMString *presentation, MVMint64 port,
+        MVMString *presentation, MVMuint16 port,
         MVMint64 type, MVMint64 protocol) {
     MVMAddress     *address;
     struct in_addr  native_address;
@@ -171,7 +171,7 @@ MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
             memset(&socket_address, 0, sizeof(socket_address));
             socket_address.sin_len    = sizeof(socket_address);
             socket_address.sin_family = AF_INET;
-            socket_address.sin_port   = (int)port;
+            socket_address.sin_port   = htons(port);
             memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
 
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
@@ -186,7 +186,7 @@ MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
 }
 
 MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
-        MVMString *presentation, MVMint64 port, MVMuint32 flowinfo, MVMuint32 scope_id,
+        MVMString *presentation, MVMuint16 port, MVMuint32 flowinfo, MVMuint32 scope_id,
         MVMint64 type, MVMint64 protocol) {
     MVMAddress      *address;
     struct in6_addr  native_address;
@@ -211,10 +211,10 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
             memset(&socket_address, 0, sizeof(socket_address));
             socket_address.sin6_len      = sizeof(socket_address);
             socket_address.sin6_family   = AF_INET6;
-            socket_address.sin6_port     = (int)port;
-            socket_address.sin6_flowinfo = flowinfo;
+            socket_address.sin6_port     = htons(port);
+            socket_address.sin6_flowinfo = htonl(flowinfo);
             memcpy(&socket_address.sin6_addr, &native_address, sizeof(native_address));
-            socket_address.sin6_scope_id = scope_id;
+            socket_address.sin6_scope_id = htonl(scope_id);
 
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
             memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
@@ -311,7 +311,7 @@ MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *addres
 }
 
 MVMObject * MVM_address_resolve_sync(MVMThreadContext *tc,
-        MVMString *host, MVMint64 port,
+        MVMString *host, MVMuint16 port,
         MVMint64 family, MVMint64 type, MVMint64 protocol,
         MVMint64 passive) {
     char *host_cstr;
@@ -330,7 +330,7 @@ MVMObject * MVM_address_resolve_sync(MVMThreadContext *tc,
     if (passive) hints.ai_flags |= AI_PASSIVE;
 
     host_cstr = MVM_string_utf8_encode_C_string(tc, host);
-    snprintf(port_cstr, 8, "%"PRIi64"", port);
+    snprintf(port_cstr, 8, "%"PRIu16"", port);
 
     MVM_gc_mark_thread_blocked(tc);
     error = getaddrinfo(host_cstr, port_cstr, &hints, &result);

@@ -5723,7 +5723,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
             }
             OP(getaddrinfo):
                 GET_REG(cur_op, 0).o = MVM_address_resolve_sync(tc,
-                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64,
+                    GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64,
                     GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64, GET_REG(cur_op, 10).i64,
                     GET_REG(cur_op, 12).i64);
                 cur_op += 14;
@@ -5763,13 +5763,14 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
             }
             OP(addrfromipv4):
                 GET_REG(cur_op, 0).o = MVM_address_from_ipv4_presentation(tc,
-                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64,
+                    GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64,
                     GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64);
                 cur_op += 10;
                 goto NEXT;
             OP(addrfromipv6):
                 GET_REG(cur_op, 0).o = MVM_address_from_ipv6_presentation(tc,
-                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64, (MVMuint32)GET_REG(cur_op, 6).i64, (MVMuint32)GET_REG(cur_op, 8).i64,
+                    GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64,
+                    (MVMuint32)GET_REG(cur_op, 6).i64, (MVMuint32)GET_REG(cur_op, 8).i64,
                     GET_REG(cur_op, 10).i64, GET_REG(cur_op, 12).i64);
                 cur_op += 14;
                 goto NEXT;
@@ -5792,7 +5793,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
             OP(addrport): {
                 MVMObject *address = GET_REG(cur_op, 2).o;
                 if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
-                    GET_REG(cur_op, 0).i64 = MVM_address_port(tc, (MVMAddress *)address);
+                    GET_REG(cur_op, 0).i64 = (MVMint64)MVM_address_port(tc, (MVMAddress *)address);
                 else
                     MVM_exception_throw_adhoc(tc,
                         "addrport requires a concrete object with REPR MVMAddress, got %s (%s)",
