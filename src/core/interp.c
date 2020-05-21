@@ -5789,6 +5789,39 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 4;
                 goto NEXT;
             }
+            OP(addrport): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
+                    GET_REG(cur_op, 0).i64 = MVM_address_port(tc, (MVMAddress *)address);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrport requires a concrete object with REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                cur_op += 4;
+                goto NEXT;
+            }
+            OP(addrflowinfo): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
+                    GET_REG(cur_op, 0).i64 = (MVMint64)MVM_address_flowinfo(tc, (MVMAddress *)address);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrflowinfo requires a concrete object with REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                cur_op += 4;
+                goto NEXT;
+            }
+            OP(addrscopeid): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
+                    GET_REG(cur_op, 0).i64 = (MVMint64)MVM_address_scope_id(tc, (MVMAddress *)address);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrscopeid requires a concrete object with REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                cur_op += 4;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;

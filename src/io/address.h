@@ -1,3 +1,7 @@
+MVMint64  MVM_address_port(MVMThreadContext *tc, MVMAddress *address);
+MVMuint32 MVM_address_flowinfo(MVMThreadContext *tc, MVMAddress *address);
+MVMuint32 MVM_address_scope_id(MVMThreadContext *tc, MVMAddress *address);
+
 MVMint64 MVM_address_family(MVMThreadContext *tc, MVMAddress *address);
 MVMint64 MVM_address_type(MVMThreadContext *tc, MVMAddress *address);
 MVMint64 MVM_address_protocol(MVMThreadContext *tc, MVMAddress *address);

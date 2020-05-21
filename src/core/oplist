@@ -893,6 +893,9 @@ addrfromipv4        w(obj) r(str) r(int64) r(int64) r(int64) :pure
 addrfromipv6        w(obj) r(str) r(int64) r(int64) r(int64) r(int64) r(int64) :pure
 addrfrompath        w(obj) r(str) r(int64) r(int64) :pure
 addrtopres          w(str) r(obj) :pure
+addrport            w(int64) r(obj) :pure
+addrflowinfo        w(int64) r(obj) :pure
+addrscopeid         w(int64) r(obj) :pure
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.

@@ -108,6 +108,31 @@ static MVMint64 from_native_protocol(MVMThreadContext *tc, int protocol) {
     }
 }
 
+MVMint64 MVM_address_port(MVMThreadContext *tc, MVMAddress *address) {
+    switch (address->body.family) {
+        case MVM_SOCKET_FAMILY_INET:
+            return ((struct sockaddr_in *)&address->body.storage)->sin_port;
+        case MVM_SOCKET_FAMILY_INET6:
+            return ((struct sockaddr_in6 *)&address->body.storage)->sin6_port;
+        default:
+            MVM_exception_throw_adhoc(tc, "Can only get the port of an IP address");
+    }
+}
+
+MVMuint32 MVM_address_flowinfo(MVMThreadContext *tc, MVMAddress *address) {
+    if (address->body.family == MVM_SOCKET_FAMILY_INET6)
+        return ((struct sockaddr_in6 *)&address->body.storage)->sin6_flowinfo;
+    else
+        MVM_exception_throw_adhoc(tc, "Can only get the flowinfo of an IPv6 address");
+}
+
+MVMuint32 MVM_address_scope_id(MVMThreadContext *tc, MVMAddress *address) {
+    if (address->body.family == MVM_SOCKET_FAMILY_INET6)
+        return ((struct sockaddr_in6 *)&address->body.storage)->sin6_scope_id;
+    else
+        MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
+}
+
 MVMint64 MVM_address_family(MVMThreadContext *tc, MVMAddress *address) {
     return address->body.family;
 }
