@@ -3688,18 +3688,16 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 2;
                 goto NEXT;
             OP(connect_sk):
-                MVM_io_connect(tc, GET_REG(cur_op, 0).o,
-                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).u16);
-                cur_op += 8;
+                MVM_io_connect(tc, GET_REG(cur_op, 0).o, GET_REG(cur_op, 2).o);
+                cur_op += 4;
                 goto NEXT;
             OP(socket):
                 GET_REG(cur_op, 0).o = MVM_io_socket_create(tc, GET_REG(cur_op, 2).i64);
                 cur_op += 4;
                 goto NEXT;
             OP(bind_sk):
-                MVM_io_bind(tc, GET_REG(cur_op, 0).o,
-                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).u16, (MVMint32)GET_REG(cur_op, 8).i64);
-                cur_op += 10;
+                MVM_io_bind(tc, GET_REG(cur_op, 0).o, GET_REG(cur_op, 2).o, (MVMint32)GET_REG(cur_op, 4).i64);
+                cur_op += 6;
                 goto NEXT;
             OP(accept_sk):
                 GET_REG(cur_op, 0).o = MVM_io_accept(tc, GET_REG(cur_op, 2).o);

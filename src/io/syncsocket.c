@@ -404,28 +404,27 @@ struct sockaddr * MVM_io_resolve_host_name(MVMThreadContext *tc,
 }
 
 /* Establishes a connection. */
-static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h, MVMString *host, MVMint64 port, MVMuint16 family) {
+static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address) {
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
     unsigned int interval_id;
 
     interval_id = MVM_telemetry_interval_start(tc, "syncsocket connect");
     if (!data->handle) {
-        struct sockaddr *dest = MVM_io_resolve_host_name(tc, host, port, family, MVM_SOCKET_TYPE_STREAM, MVM_SOCKET_PROTOCOL_ANY, 0);
+        struct sockaddr *dest      = (struct sockaddr *)&address->body.storage;
+        socklen_t        dest_size = address->body.storage.ss_len;
         int r;
 
-        Socket s = socket(dest->sa_family , SOCK_STREAM , 0);
+        Socket s = socket(address->body.family, address->body.type, address->body.protocol);
         if (MVM_IS_SOCKET_ERROR(s)) {
-            MVM_free(dest);
             MVM_telemetry_interval_stop(tc, interval_id, "syncsocket connect");
             throw_error(tc, s, "create socket");
         }
 
         do {
             MVM_gc_mark_thread_blocked(tc);
-            r = connect(s, dest, (socklen_t)get_struct_size_for_family(dest->sa_family));
+            r = connect(s, dest, dest_size);
             MVM_gc_mark_thread_unblocked(tc);
         } while(r == -1 && errno == EINTR);
-        MVM_free(dest);
         if (MVM_IS_SOCKET_ERROR(r)) {
             MVM_telemetry_interval_stop(tc, interval_id, "syncsocket connect");
             throw_error(tc, s, "connect socket");
@@ -439,17 +438,16 @@ static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h, MVMString *host
     }
 }
 
-static void socket_bind(MVMThreadContext *tc, MVMOSHandle *h, MVMString *host, MVMint64 port, MVMuint16 family, MVMint32 backlog) {
+static void socket_bind(MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address, MVMint32 backlog) {
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
     if (!data->handle) {
-        struct sockaddr *dest = MVM_io_resolve_host_name(tc, host, port, family, MVM_SOCKET_TYPE_STREAM, MVM_SOCKET_PROTOCOL_ANY, 1);
+        struct sockaddr *dest      = (struct sockaddr *)&address->body.storage;
+        socklen_t        dest_size = address->body.storage.ss_len;
         int r;
 
-        Socket s = socket(dest->sa_family , SOCK_STREAM , 0);
-        if (MVM_IS_SOCKET_ERROR(s)) {
-            MVM_free(dest);
+        Socket s = socket(address->body.family, address->body.type, address->body.protocol);
+        if (MVM_IS_SOCKET_ERROR(s))
             throw_error(tc, s, "create socket");
-        }
 
         /* On POSIX, we set the SO_REUSEADDR option, which allows re-use of
          * a port in TIME_WAIT state (modulo many hair details). Oringinally,
@@ -464,8 +462,7 @@ static void socket_bind(MVMThreadContext *tc, MVMOSHandle *h, MVMString *host, M
         }
 #endif
 
-        r = bind(s, dest, (socklen_t)get_struct_size_for_family(dest->sa_family));
-        MVM_free(dest);
+        r = bind(s, dest, dest_size);
         if (MVM_IS_SOCKET_ERROR(r))
             throw_error(tc, s, "bind socket");
 
