@@ -3,11 +3,11 @@ struct MVMAddressBody {
     /* The native address. */
     struct sockaddr_storage storage;
     /* The address' family. */
-    MVMint64 family;
+    sa_family_t family;
     /* The address' socket type. */
-    MVMint64 type;
+    int type;
     /* The address' protocol. */
-    MVMint64 protocol;
+    int protocol;
 };
 
 struct MVMAddress {
