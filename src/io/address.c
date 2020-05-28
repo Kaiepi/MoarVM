@@ -245,13 +245,16 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path, MVMint6
     } else {
         struct sockaddr_un socket_address;
         memset(&socket_address, 0, sizeof(socket_address));
+        /* XXX TODO: sun_len isn't POSIX... so what platforms don't have it and
+         * need to be handled differently? */
+        socket_address.sun_len    = sizeof(socket_address) - sizeof(socket_address.sun_path) + sun_len;
         socket_address.sun_family = AF_UNIX;
         strcpy(socket_address.sun_path, path_cstr);
         MVM_free(path_cstr);
 
         MVMROOT(tc, path, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-            memcpy(&address->body.storage, &socket_address, SUN_LEN(&socket_address));
+            memcpy(&address->body.storage, &socket_address, socket_address.sun_len);
             address->body.family   = AF_UNIX;
             address->body.type     = to_native_type(tc, type);
             address->body.protocol = to_native_protocol(tc, protocol);
