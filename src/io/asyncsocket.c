@@ -175,8 +175,9 @@ static const MVMAsyncTaskOps read_op_table = {
     read_gc_free
 };
 
-static MVMAsyncTask * read_bytes(MVMThreadContext *tc, MVMOSHandle *h, MVMObject *queue,
-                                 MVMObject *schedulee, MVMObject *buf_type, MVMObject *async_type) {
+static MVMAsyncTask * read_bytes(MVMThreadContext *tc,
+        MVMOSHandle *h, MVMObject *buf_type,
+        MVMObject *queue, MVMObject *schedulee, MVMObject *async_type) {
     MVMAsyncTask *task;
     ReadInfo    *ri;
 
@@ -344,8 +345,9 @@ static const MVMAsyncTaskOps write_op_table = {
     write_gc_free
 };
 
-static MVMAsyncTask * write_bytes(MVMThreadContext *tc, MVMOSHandle *h, MVMObject *queue,
-                                  MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type) {
+static MVMAsyncTask * write_bytes(MVMThreadContext *tc,
+        MVMOSHandle *h, MVMObject *buffer,
+        MVMObject *queue, MVMObject *schedulee, MVMObject *async_type) {
     MVMAsyncTask *task;
     WriteInfo    *wi;
 
@@ -627,9 +629,9 @@ static const MVMAsyncTaskOps connect_op_table = {
 };
 
 /* Sets off an asynchronous socket connection. */
-MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc, MVMObject *queue,
-                                        MVMObject *schedulee, MVMObject *address,
-                                        MVMObject *async_type) {
+MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc,
+        MVMObject *address,
+        MVMObject *queue, MVMObject *schedulee, MVMObject *async_type) {
     MVMAsyncTask *task;
     ConnectInfo  *ci;
 
@@ -645,7 +647,7 @@ MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc, MVMObject *queue,
             "asyncconnect address type must have the MVMAddress REPR");
 
     /* Create async task handle. */
-    MVMROOT4(tc, queue, schedulee, address, async_type, {
+    MVMROOT4(tc, queue, schedulee, async_type, address, {
         task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
         MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
         MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
@@ -842,9 +844,9 @@ static const MVMAsyncTaskOps listen_op_table = {
 };
 
 /* Initiates an async socket listener. */
-MVMObject * MVM_io_socket_listen_async(MVMThreadContext *tc, MVMObject *queue,
-                                       MVMObject *schedulee, MVMObject *address,
-                                       MVMint32 backlog, MVMObject *async_type) {
+MVMObject * MVM_io_socket_listen_async(MVMThreadContext *tc,
+        MVMObject *address, MVMint32 backlog,
+        MVMObject *queue, MVMObject *schedulee, MVMObject *async_type) {
     MVMAsyncTask *task;
     ListenInfo   *li;
 

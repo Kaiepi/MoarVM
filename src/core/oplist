@@ -543,9 +543,9 @@ eof_fh              w(int64) r(obj)
 getstdin            w(obj) :pure
 getstdout           w(obj) :pure
 getstderr           w(obj) :pure
-connect_sk          r(obj) r(obj)
+connect_sk          r(obj) r(int64) r(int64) r(int64) r(obj)
 socket              w(obj) r(int64)
-bind_sk             r(obj) r(obj) r(int64)
+bind_sk             r(obj) r(int64) r(int64) r(int64) r(obj) r(int64)
 DEPRECATED_24       r(obj) r(str)
 accept_sk           w(obj) r(obj)
 decodetocodes       r(obj) r(str) r(int64) r(obj)
@@ -647,7 +647,7 @@ cancel              r(obj)
 signal              w(obj) r(obj) r(obj) r(int64) r(obj)
 watchfile           w(obj) r(obj) r(obj) r(str) r(obj)
 asyncconnect        w(obj) r(obj) r(obj) r(obj) r(obj)
-asynclisten         w(obj) r(obj) r(obj) r(obj) r(int64) r(obj)
+asynclisten         w(obj) r(obj) r(int64) r(obj) r(obj) r(obj)
 DEPRECATED_14       w(obj) r(obj) r(obj) r(obj) r(str) r(obj)
 asyncwritebytes     w(obj) r(obj) r(obj) r(obj) r(obj) r(obj)
 DEPRECATED_16       w(obj) r(obj) r(obj) r(obj) r(obj)
@@ -760,7 +760,7 @@ multidimref_i       w(obj) r(obj) r(obj) :pure :useshll
 multidimref_n       w(obj) r(obj) r(obj) :pure :useshll
 multidimref_s       w(obj) r(obj) r(obj) :pure :useshll
 fileno_fh           w(int64) r(obj) :pure
-asyncudp            w(obj) r(obj) r(obj) r(obj) r(int64) r(obj)
+asyncudp            w(obj) r(obj) r(int64) r(obj) r(obj) r(obj)
 DEPRECATED_15       w(obj) r(obj) r(obj) r(obj) r(str) r(obj) r(str) r(int64)
 asyncwritebytesto   w(obj) r(obj) r(obj) r(obj) r(obj) r(obj) r(obj)
 objprimbits         w(int64) r(obj) :specializable
@@ -886,12 +886,9 @@ totalmem            w(int64) :pure
 nextdispatcherfor   r(obj) r(obj)
 takenextdispatcher  w(obj) :noinline
 getaddrinfo         w(obj) r(str) r(int64) r(int64) r(int64) r(int64) r(int64)
-addrfamily          w(int64) r(obj) :pure
-addrtype            w(int64) r(obj) :pure
-addrprotocol        w(int64) r(obj) :pure
-addrfromipv4        w(obj) r(str) r(int64) r(int64) r(int64) :pure
-addrfromipv6        w(obj) r(str) r(int64) r(int64) r(int64) r(int64) r(int64) :pure
-addrfrompath        w(obj) r(str) r(int64) r(int64) :pure
+addrfromipv4        w(obj) r(str) r(int64) :pure
+addrfromipv6        w(obj) r(str) r(int64) r(int64) r(int64) :pure
+addrfrompath        w(obj) r(str) :pure
 addrtopres          w(str) r(obj) :pure
 addrport            w(int64) r(obj) :pure
 addrflowinfo        w(int64) r(obj) :pure

@@ -14,7 +14,7 @@
 
 static const size_t MAX_SUN_LEN = sizeof(((struct sockaddr_un *)NULL)->sun_path);
 
-static sa_family_t to_native_family(MVMThreadContext *tc, MVMint64 family) {
+sa_family_t MVM_address_to_native_family(MVMThreadContext *tc, MVMint64 family) {
     switch (family) {
         case MVM_SOCKET_FAMILY_UNSPEC:
             return PF_UNSPEC;
@@ -29,7 +29,7 @@ static sa_family_t to_native_family(MVMThreadContext *tc, MVMint64 family) {
     }
 }
 
-static MVMint64 from_native_family(MVMThreadContext *tc, sa_family_t family) {
+MVMint64 MVM_address_from_native_family(MVMThreadContext *tc, sa_family_t family) {
     switch (family) {
         case PF_UNSPEC:
             return MVM_SOCKET_FAMILY_UNSPEC;
@@ -44,7 +44,7 @@ static MVMint64 from_native_family(MVMThreadContext *tc, sa_family_t family) {
     }
 }
 
-static int to_native_type(MVMThreadContext *tc, MVMint64 type) {
+int MVM_address_to_native_type(MVMThreadContext *tc, MVMint64 type) {
     switch (type) {
         case MVM_SOCKET_TYPE_ANY:
             return 0;
@@ -63,7 +63,7 @@ static int to_native_type(MVMThreadContext *tc, MVMint64 type) {
     }
 }
 
-static int from_native_type(MVMThreadContext *tc, int type) {
+MVMint64 MVM_address_from_native_type(MVMThreadContext *tc, int type) {
     switch (type) {
         case 0:
             return MVM_SOCKET_TYPE_ANY;
@@ -82,7 +82,7 @@ static int from_native_type(MVMThreadContext *tc, int type) {
     }
 }
 
-static int to_native_protocol(MVMThreadContext *tc, MVMint64 protocol) {
+int MVM_address_to_native_protocol(MVMThreadContext *tc, MVMint64 protocol) {
     switch (protocol) {
         case MVM_SOCKET_PROTOCOL_ANY:
             return 0;
@@ -95,7 +95,7 @@ static int to_native_protocol(MVMThreadContext *tc, MVMint64 protocol) {
     }
 }
 
-static MVMint64 from_native_protocol(MVMThreadContext *tc, int protocol) {
+MVMint64 MVM_address_from_native_protocol(MVMThreadContext *tc, int protocol) {
     switch (protocol) {
         case 0:
             return MVM_SOCKET_PROTOCOL_ANY;
@@ -109,7 +109,7 @@ static MVMint64 from_native_protocol(MVMThreadContext *tc, int protocol) {
 }
 
 MVMuint16 MVM_address_port(MVMThreadContext *tc, MVMAddress *address) {
-    switch (address->body.family) {
+    switch (address->body.storage.ss_family) {
         case AF_INET:
             return ntohs(((struct sockaddr_in *)&address->body.storage)->sin_port);
         case AF_INET6:
@@ -120,34 +120,21 @@ MVMuint16 MVM_address_port(MVMThreadContext *tc, MVMAddress *address) {
 }
 
 MVMuint32 MVM_address_flowinfo(MVMThreadContext *tc, MVMAddress *address) {
-    if (address->body.family == AF_INET6)
+    if (address->body.storage.ss_family == AF_INET6)
         return ntohl(((struct sockaddr_in6 *)&address->body.storage)->sin6_flowinfo);
     else
         MVM_exception_throw_adhoc(tc, "Can only get the flowinfo of an IPv6 address");
 }
 
 MVMuint32 MVM_address_scope_id(MVMThreadContext *tc, MVMAddress *address) {
-    if (address->body.family == AF_INET6)
+    if (address->body.storage.ss_family == AF_INET6)
         return ntohl(((struct sockaddr_in6 *)&address->body.storage)->sin6_scope_id);
     else
         MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
 }
 
-MVMint64 MVM_address_family(MVMThreadContext *tc, MVMAddress *address) {
-    return from_native_family(tc, address->body.family);
-}
-
-MVMint64 MVM_address_type(MVMThreadContext *tc, MVMAddress *address) {
-    return from_native_type(tc, address->body.type);
-}
-
-MVMint64 MVM_address_protocol(MVMThreadContext *tc, MVMAddress *address) {
-    return from_native_protocol(tc, address->body.protocol);
-}
-
 MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
-        MVMString *presentation, MVMuint16 port,
-        MVMint64 type, MVMint64 protocol) {
+        MVMString *presentation, MVMuint16 port) {
     MVMAddress     *address;
     struct in_addr  native_address;
     char           *ip;
@@ -166,19 +153,16 @@ MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
             "Failed to create an IPv4 address from its presentation format (%s): %s", ip, strerror(errno));
     }
     else {
-        MVMROOT(tc, presentation, {
-            struct sockaddr_in socket_address;
-            memset(&socket_address, 0, sizeof(socket_address));
-            socket_address.sin_len    = sizeof(socket_address);
-            socket_address.sin_family = AF_INET;
-            socket_address.sin_port   = htons(port);
-            memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
+        struct sockaddr_in socket_address;
+        memset(&socket_address, 0, sizeof(socket_address));
+        socket_address.sin_len    = sizeof(socket_address);
+        socket_address.sin_family = AF_INET;
+        socket_address.sin_port   = htons(port);
+        memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
 
+        MVMROOT(tc, presentation, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
             memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
-            address->body.family   = AF_INET;
-            address->body.type     = to_native_type(tc, type);
-            address->body.protocol = to_native_protocol(tc, protocol);
         });
     }
 
@@ -186,8 +170,7 @@ MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
 }
 
 MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
-        MVMString *presentation, MVMuint16 port, MVMuint32 flowinfo, MVMuint32 scope_id,
-        MVMint64 type, MVMint64 protocol) {
+        MVMString *presentation, MVMuint16 port, MVMuint32 flowinfo, MVMuint32 scope_id) {
     MVMAddress      *address;
     struct in6_addr  native_address;
     char            *ip;
@@ -206,28 +189,25 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
             "Failed to create an IPv6 address from its presentation format (%s): %s", ip, strerror(errno));
     }
     else {
-        MVMROOT(tc, presentation, {
-            struct sockaddr_in6 socket_address;
-            memset(&socket_address, 0, sizeof(socket_address));
-            socket_address.sin6_len      = sizeof(socket_address);
-            socket_address.sin6_family   = AF_INET6;
-            socket_address.sin6_port     = htons(port);
-            socket_address.sin6_flowinfo = htonl(flowinfo);
-            memcpy(&socket_address.sin6_addr, &native_address, sizeof(native_address));
-            socket_address.sin6_scope_id = htonl(scope_id);
+        struct sockaddr_in6 socket_address;
+        memset(&socket_address, 0, sizeof(socket_address));
+        socket_address.sin6_len      = sizeof(socket_address);
+        socket_address.sin6_family   = AF_INET6;
+        socket_address.sin6_port     = htons(port);
+        socket_address.sin6_flowinfo = htonl(flowinfo);
+        memcpy(&socket_address.sin6_addr, &native_address, sizeof(native_address));
+        socket_address.sin6_scope_id = htonl(scope_id);
 
+        MVMROOT(tc, presentation, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
             memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
-            address->body.family   = AF_INET6;
-            address->body.type     = to_native_type(tc, type);
-            address->body.protocol = to_native_protocol(tc, protocol);
         });
     }
 
     return (MVMObject *)address;
 }
 
-MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path, MVMint64 type, MVMint64 protocol) {
+MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
 #if defined(_WIN32) || !defined(AF_UNIX)
     MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
 #else
@@ -255,9 +235,6 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path, MVMint6
         MVMROOT(tc, path, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
             memcpy(&address->body.storage, &socket_address, socket_address.sun_len);
-            address->body.family   = AF_UNIX;
-            address->body.type     = to_native_type(tc, type);
-            address->body.protocol = to_native_protocol(tc, protocol);
         });
 
         return (MVMObject *)address;
@@ -268,7 +245,7 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path, MVMint6
 MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *address) {
     MVMString *presentation;
 
-    switch (address->body.family) {
+    switch (address->body.storage.ss_family) {
         case AF_INET: {
             char            presentation_cstr[INET_ADDRSTRLEN];
             struct in_addr *native_address;
@@ -323,12 +300,12 @@ MVMObject * MVM_address_resolve_sync(MVMThreadContext *tc,
     struct addrinfo hints, *result;
     int             error;
 
-    MVMObject *addresses;
+    MVMObject *arr;
 
     memset(&hints, 0, sizeof(hints));
-    hints.ai_family   = to_native_family(tc, family);
-    hints.ai_socktype = to_native_type(tc, type);
-    hints.ai_protocol = to_native_protocol(tc, protocol);
+    hints.ai_family   = MVM_address_to_native_family(tc, family);
+    hints.ai_socktype = MVM_address_to_native_type(tc, type);
+    hints.ai_protocol = MVM_address_to_native_protocol(tc, protocol);
     hints.ai_flags    = AI_ADDRCONFIG | AI_NUMERICSERV;
     if (passive) hints.ai_flags |= AI_PASSIVE;
 
@@ -348,21 +325,44 @@ MVMObject * MVM_address_resolve_sync(MVMThreadContext *tc,
     MVM_free(host_cstr);
 
     MVMROOT(tc, host, {
-        MVMAddress *address = NULL;
-        addresses = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-        MVMROOT2(tc, addresses, address, {
-            struct addrinfo *info;
-            for (info = result; info != NULL; info = info->ai_next) {
-                address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-                memcpy(&address->body.storage, info->ai_addr, info->ai_addrlen);
-                address->body.family   = info->ai_family;
-                address->body.type     = info->ai_socktype;
-                address->body.protocol = info->ai_protocol;
-                MVM_repr_push_o(tc, addresses, (MVMObject *)address);
+        arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVMROOT(tc, arr, {
+            struct addrinfo *native_address_info;
+            for (
+                native_address_info = result;
+                native_address_info != NULL;
+                native_address_info = native_address_info->ai_next
+            ) {
+                MVMObject  *address_info   = NULL;
+                MVMAddress *address        = NULL;
+                MVMObject  *boxed_family   = NULL;
+                MVMObject  *boxed_type     = NULL;
+                MVMObject  *boxed_protocol = NULL;
+                MVMROOT5(tc, address_info, address, boxed_family, boxed_type, boxed_protocol, {
+                    address_info = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+                    address      = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+                    memcpy(&address->body.storage, native_address_info->ai_addr, native_address_info->ai_addrlen);
+
+                    boxed_family   = MVM_repr_box_int(tc,
+                        tc->instance->boot_types.BOOTInt,
+                        MVM_address_from_native_family(tc, native_address_info->ai_family));
+                    boxed_type     = MVM_repr_box_int(tc,
+                        tc->instance->boot_types.BOOTInt,
+                        MVM_address_from_native_type(tc, native_address_info->ai_socktype));
+                    boxed_protocol = MVM_repr_box_int(tc,
+                        tc->instance->boot_types.BOOTInt,
+                        MVM_address_from_native_protocol(tc, native_address_info->ai_protocol));
+
+                    MVM_repr_push_o(tc, address_info, (MVMObject *)address);
+                    MVM_repr_push_o(tc, address_info, boxed_family);
+                    MVM_repr_push_o(tc, address_info, boxed_type);
+                    MVM_repr_push_o(tc, address_info, boxed_protocol);
+                    MVM_repr_push_o(tc, arr, address_info);
+                });
             }
         });
     });
 
     freeaddrinfo(result);
-    return addresses;
+    return arr;
 }

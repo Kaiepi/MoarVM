@@ -3688,16 +3688,21 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 2;
                 goto NEXT;
             OP(connect_sk):
-                MVM_io_connect(tc, GET_REG(cur_op, 0).o, GET_REG(cur_op, 2).o);
-                cur_op += 4;
+                MVM_io_connect(tc, GET_REG(cur_op, 0).o,
+                    GET_REG(cur_op, 2).i64, GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).i64,
+                    GET_REG(cur_op, 8).o);
+                cur_op += 10;
                 goto NEXT;
             OP(socket):
                 GET_REG(cur_op, 0).o = MVM_io_socket_create(tc, GET_REG(cur_op, 2).i64);
                 cur_op += 4;
                 goto NEXT;
             OP(bind_sk):
-                MVM_io_bind(tc, GET_REG(cur_op, 0).o, GET_REG(cur_op, 2).o, (MVMint32)GET_REG(cur_op, 4).i64);
-                cur_op += 6;
+                MVM_io_bind(tc, GET_REG(cur_op, 0).o,
+                    GET_REG(cur_op, 2).i64, GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).i64,
+                    GET_REG(cur_op, 8).o,
+                    (MVMint32)GET_REG(cur_op, 10).i64);
+                cur_op += 12;
                 goto NEXT;
             OP(accept_sk):
                 GET_REG(cur_op, 0).o = MVM_io_accept(tc, GET_REG(cur_op, 2).o);
@@ -4273,27 +4278,26 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 goto NEXT;
             OP(asyncconnect):
                 GET_REG(cur_op, 0).o = MVM_io_socket_connect_async(tc,
-                    GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).o,
-                    GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o);
+                    GET_REG(cur_op, 2).o,
+                    GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o);
                 cur_op += 10;
                 goto NEXT;
             OP(asynclisten):
                 GET_REG(cur_op, 0).o = MVM_io_socket_listen_async(tc,
-                    GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).o,
-                    GET_REG(cur_op, 6).o, (MVMint32)GET_REG(cur_op, 8).i64,
-                    GET_REG(cur_op, 10).o);
+                    GET_REG(cur_op, 2).o, (MVMint32)GET_REG(cur_op, 4).i64,
+                    GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o, GET_REG(cur_op, 10).o);
                 cur_op += 12;
                 goto NEXT;
             OP(asyncwritebytes):
-                GET_REG(cur_op, 0).o = MVM_io_write_bytes_async(tc, GET_REG(cur_op, 2).o,
-                    GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o,
-                    GET_REG(cur_op, 10).o);
+                GET_REG(cur_op, 0).o = MVM_io_write_bytes_async(tc,
+                    GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).o,
+                    GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o, GET_REG(cur_op, 10).o);
                 cur_op += 12;
                 goto NEXT;
             OP(asyncreadbytes):
-                GET_REG(cur_op, 0).o = MVM_io_read_bytes_async(tc, GET_REG(cur_op, 2).o,
-                    GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o,
-                    GET_REG(cur_op, 10).o);
+                GET_REG(cur_op, 0).o = MVM_io_read_bytes_async(tc,
+                    GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).o,
+                    GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o, GET_REG(cur_op, 10).o);
                 cur_op += 12;
                 goto NEXT;
             OP(getlexstatic_o): {
@@ -4910,15 +4914,14 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 goto NEXT;
             OP(asyncudp):
                 GET_REG(cur_op, 0).o = MVM_io_socket_udp_async(tc,
-                    GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).o,
-                    GET_REG(cur_op, 6).o,  GET_REG(cur_op, 8).i64,
-                    GET_REG(cur_op, 10).o);
+                    GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).i64,
+                    GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o, GET_REG(cur_op, 10).o);
                 cur_op += 12;
                 goto NEXT;
             OP(asyncwritebytesto):
-                GET_REG(cur_op, 0).o = MVM_io_write_bytes_to_async(tc, GET_REG(cur_op, 2).o,
-                    GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o, GET_REG(cur_op, 8).o,
-                    GET_REG(cur_op, 10).o, GET_REG(cur_op, 12).o);
+                GET_REG(cur_op, 0).o = MVM_io_write_bytes_to_async(tc,
+                    GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o,
+                    GET_REG(cur_op, 8).o, GET_REG(cur_op, 10).o, GET_REG(cur_op, 12).o);
                 cur_op += 14;
                 goto NEXT;
             OP(objprimbits): {
@@ -5727,56 +5730,20 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     GET_REG(cur_op, 12).i64);
                 cur_op += 14;
                 goto NEXT;
-            OP(addrfamily): {
-                MVMObject *address = GET_REG(cur_op, 2).o;
-                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
-                    GET_REG(cur_op, 0).i64 = MVM_address_family(tc, (MVMAddress *)address);
-                else
-                    MVM_exception_throw_adhoc(tc,
-                        "addrfamily requires a concrete object with REPR MVMAddress, got %s (%s)",
-                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
-                cur_op += 4;
-                goto NEXT;
-            }
-            OP(addrtype): {
-                MVMObject *address = GET_REG(cur_op, 2).o;
-                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
-                    GET_REG(cur_op, 0).i64 = MVM_address_type(tc, (MVMAddress *)address);
-                else
-                    MVM_exception_throw_adhoc(tc,
-                        "addrtype requires a concrete object with REPR MVMAddress, got %s (%s)",
-                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
-                cur_op += 4;
-                goto NEXT;
-            }
-            OP(addrprotocol): {
-                MVMObject *address = GET_REG(cur_op, 2).o;
-                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
-                    GET_REG(cur_op, 0).i64 = MVM_address_protocol(tc, (MVMAddress *)address);
-                else
-                    MVM_exception_throw_adhoc(tc,
-                        "addrprotocol requires a concrete object with REPR MVMAddress, got %s (%s)",
-                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
-                cur_op += 4;
-                goto NEXT;
-            }
             OP(addrfromipv4):
                 GET_REG(cur_op, 0).o = MVM_address_from_ipv4_presentation(tc,
-                    GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64,
-                    GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64);
-                cur_op += 10;
+                    GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64);
+                cur_op += 6;
                 goto NEXT;
             OP(addrfromipv6):
                 GET_REG(cur_op, 0).o = MVM_address_from_ipv6_presentation(tc,
                     GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64,
-                    (MVMuint32)GET_REG(cur_op, 6).i64, (MVMuint32)GET_REG(cur_op, 8).i64,
-                    GET_REG(cur_op, 10).i64, GET_REG(cur_op, 12).i64);
-                cur_op += 14;
+                    (MVMuint32)GET_REG(cur_op, 6).i64, (MVMuint32)GET_REG(cur_op, 8).i64);
+                cur_op += 10;
                 goto NEXT;
             OP(addrfrompath):
-                GET_REG(cur_op, 0).o = MVM_address_from_path(tc,
-                    GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).i64);
-                cur_op += 8;
+                GET_REG(cur_op, 0).o = MVM_address_from_path(tc, GET_REG(cur_op, 2).s);
+                cur_op += 4;
                 goto NEXT;
             OP(addrtopres): {
                 MVMObject *address = GET_REG(cur_op, 2).o;

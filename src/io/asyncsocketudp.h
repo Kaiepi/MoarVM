@@ -1,3 +1,3 @@
-MVMObject * MVM_io_socket_udp_async(MVMThreadContext *tc, MVMObject *queue,
-                                    MVMObject *schedulee, MVMObject *address,
-                                    MVMint64 flags, MVMObject *async_type);
+MVMObject * MVM_io_socket_udp_async(MVMThreadContext *tc,
+        MVMObject *address, MVMint64 flags,
+        MVMObject *queue, MVMObject *schedulee, MVMObject *async_type);

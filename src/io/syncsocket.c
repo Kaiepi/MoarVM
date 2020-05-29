@@ -238,7 +238,9 @@ static void gc_free(MVMThreadContext *tc, MVMObject *h, void *d) {
 }
 
 /* Establishes a connection. */
-static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address) {
+static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h,
+        MVMint64 family, MVMint64 type, MVMint64 protocol,
+        MVMAddress *address) {
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
     unsigned int interval_id;
 
@@ -246,9 +248,11 @@ static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *add
     if (!data->handle) {
         struct sockaddr *dest      = (struct sockaddr *)&address->body.storage;
         socklen_t        dest_size = address->body.storage.ss_len;
-        int r;
+        int              r;
 
-        Socket s = socket(address->body.family, address->body.type, address->body.protocol);
+        Socket s = socket(MVM_address_to_native_family(tc, family),
+            MVM_address_to_native_type(tc, type),
+            MVM_address_to_native_protocol(tc, protocol));
         if (MVM_IS_SOCKET_ERROR(s)) {
             MVM_telemetry_interval_stop(tc, interval_id, "syncsocket connect");
             throw_error(tc, s, "create socket");
@@ -258,7 +262,7 @@ static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *add
             MVM_gc_mark_thread_blocked(tc);
             r = connect(s, dest, dest_size);
             MVM_gc_mark_thread_unblocked(tc);
-        } while(r == -1 && errno == EINTR);
+        } while (r == -1 && errno == EINTR);
         if (MVM_IS_SOCKET_ERROR(r)) {
             MVM_telemetry_interval_stop(tc, interval_id, "syncsocket connect");
             throw_error(tc, s, "connect socket");
@@ -272,14 +276,19 @@ static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *add
     }
 }
 
-static void socket_bind(MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address, MVMint32 backlog) {
+static void socket_bind(MVMThreadContext *tc, MVMOSHandle *h,
+        MVMint64 family, MVMint64 type, MVMint64 protocol,
+        MVMAddress *address,
+        MVMint32 backlog) {
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
     if (!data->handle) {
         struct sockaddr *dest      = (struct sockaddr *)&address->body.storage;
         socklen_t        dest_size = address->body.storage.ss_len;
-        int r;
+        int              r;
 
-        Socket s = socket(address->body.family, address->body.type, address->body.protocol);
+        Socket s = socket(MVM_address_to_native_family(tc, family),
+              MVM_address_to_native_type(tc, type),
+              MVM_address_to_native_protocol(tc, protocol));
         if (MVM_IS_SOCKET_ERROR(s))
             throw_error(tc, s, "create socket");
 
