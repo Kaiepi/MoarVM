@@ -227,16 +227,17 @@ MVMObject * MVM_io_write_bytes_async(MVMThreadContext *tc, MVMObject *oshandle, 
 
 MVMObject * MVM_io_write_bytes_to_async(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *queue,
                                         MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type,
-                                        MVMString *host, MVMint64 port) {
-    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "write buffer asynchronously to destination");
+                                        MVMObject *maybe_address) {
+    MVMOSHandle *handle  = verify_is_handle(tc, oshandle, "write buffer asynchronously to destination");
+    MVMAddress  *address = verify_is_address(tc, maybe_address, "write buffer asynchronously to destination");
     if (buffer == NULL)
         MVM_exception_throw_adhoc(tc, "Failed to write to filehandle: NULL buffer given");
     if (handle->body.ops->async_writable_to) {
         MVMObject *result;
-        MVMROOT6(tc, host, queue, schedulee, buffer, async_type, handle, {
+        MVMROOT6(tc, queue, schedulee, buffer, async_type, handle, address, {
             uv_mutex_t *mutex = acquire_mutex(tc, handle);
             result = (MVMObject *)handle->body.ops->async_writable_to->write_bytes_to(tc,
-                handle, queue, schedulee, buffer, async_type, host, port);
+                handle, queue, schedulee, buffer, async_type, address);
             release_mutex(tc, mutex);
         });
         return result;
