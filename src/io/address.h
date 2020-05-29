@@ -1,3 +1,19 @@
+#define MVM_SOCKET_FAMILY_UNSPEC 0
+#define MVM_SOCKET_FAMILY_INET   1
+#define MVM_SOCKET_FAMILY_INET6  2
+#define MVM_SOCKET_FAMILY_UNIX   3
+
+#define MVM_SOCKET_TYPE_ANY       0
+#define MVM_SOCKET_TYPE_STREAM    1
+#define MVM_SOCKET_TYPE_DGRAM     2
+#define MVM_SOCKET_TYPE_RAW       3
+#define MVM_SOCKET_TYPE_RDM       4
+#define MVM_SOCKET_TYPE_SEQPACKET 5
+
+#define MVM_SOCKET_PROTOCOL_ANY 0
+#define MVM_SOCKET_PROTOCOL_TCP 1
+#define MVM_SOCKET_PROTOCOL_UDP 2
+
 MVMuint16 MVM_address_port(MVMThreadContext *tc, MVMAddress *address);
 MVMuint32 MVM_address_flowinfo(MVMThreadContext *tc, MVMAddress *address);
 MVMuint32 MVM_address_scope_id(MVMThreadContext *tc, MVMAddress *address);
