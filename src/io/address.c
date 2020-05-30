@@ -128,7 +128,7 @@ MVMuint32 MVM_address_flowinfo(MVMThreadContext *tc, MVMAddress *address) {
 
 MVMuint32 MVM_address_scope_id(MVMThreadContext *tc, MVMAddress *address) {
     if (address->body.storage.ss_family == AF_INET6)
-        return ntohl(((struct sockaddr_in6 *)&address->body.storage)->sin6_scope_id);
+        return ((struct sockaddr_in6 *)&address->body.storage)->sin6_scope_id;
     else
         MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
 }
@@ -196,7 +196,7 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
         socket_address.sin6_port     = htons(port);
         socket_address.sin6_flowinfo = htonl(flowinfo);
         memcpy(&socket_address.sin6_addr, &native_address, sizeof(native_address));
-        socket_address.sin6_scope_id = htonl(scope_id);
+        socket_address.sin6_scope_id = scope_id;
 
         MVMROOT(tc, presentation, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
