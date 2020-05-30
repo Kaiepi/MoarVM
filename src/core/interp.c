@@ -5724,7 +5724,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 goto NEXT;
             }
             OP(getaddrinfo):
-                GET_REG(cur_op, 0).o = MVM_address_resolve_sync(tc,
+                GET_REG(cur_op, 0).o = MVM_io_dns_resolve(tc,
                     GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64,
                     GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64, GET_REG(cur_op, 10).i64,
                     GET_REG(cur_op, 12).i64);
