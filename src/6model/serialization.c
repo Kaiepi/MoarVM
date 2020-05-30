@@ -1,6 +1,12 @@
 #include <moar.h>
 #include <sha1.h>
 
+#ifndef _WIN32
+#include <sys/un.h>
+
+static const size_t MAX_SUN_LEN = sizeof(((struct sockaddr_un *)NULL)->sun_path);
+#endif
+
 #ifndef MAX
     #define MAX(x, y) ((y) > (x) ? (y) : (x))
 #endif
@@ -46,6 +52,7 @@
 #define REFVAR_STATIC_CODEREF       11
 #define REFVAR_CLONED_CODEREF       12
 #define REFVAR_SC_REF               13
+#define REFVAR_ADDRESS              14
 
 /* For the packed format, for "small" values of si and idx */
 #define OBJECTS_TABLE_ENTRY_SC_MASK     0x7FF
@@ -683,6 +690,52 @@ static void serialize_closure(MVMThreadContext *tc, MVMSerializationWriter *writ
     MVM_sc_set_obj_sc(tc, closure, writer->root.sc);
 }
 
+/* Sets up a network address for serialization. Different families of addresses
+ * have different information associated with them, thus address' serialization
+ * behaviour depends on their family. */
+static void write_address(MVMThreadContext *tc, MVMSerializationWriter *writer, MVMObject *obj) {
+    MVMAddressBody *body = &((MVMAddress *)obj)->body;
+    MVM_serialization_write_int(tc, writer, body->storage.ss_family);
+    switch (body->storage.ss_family) {
+        case AF_INET: {
+            struct sockaddr_in *socket_address = (struct sockaddr_in *)&body->storage;
+            MVM_serialization_write_int(tc, writer, socket_address->sin_addr.s_addr);
+            MVM_serialization_write_int(tc, writer, socket_address->sin_port);
+            break;
+        }
+        case AF_INET6: {
+            struct sockaddr_in6 *socket_address = (struct sockaddr_in6 *)&body->storage;
+            size_t               i;
+
+            for (i = 0; i < 4; ++i) {
+                size_t    j;
+                MVMuint32 dword = 0;
+                for (j = 0; j < 4; ++j) {
+                    dword = (dword << 8) | socket_address->sin6_addr.s6_addr[i * 4 + j];
+                }
+                MVM_serialization_write_int(tc, writer, dword);
+            }
+
+            MVM_serialization_write_int(tc, writer, socket_address->sin6_port);
+            MVM_serialization_write_int(tc, writer, socket_address->sin6_flowinfo);
+            MVM_serialization_write_int(tc, writer, socket_address->sin6_scope_id);
+            break;
+        }
+        case AF_UNIX: {
+#if defined(AF_UNIX)
+            struct sockaddr_un *socket_address = (struct sockaddr_un *)&body->storage;
+            MVM_serialization_write_cstr(tc, writer, socket_address->sun_path);
+#else
+            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#endif
+            break;
+        }
+        default:
+            MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", body->storage.ss_family);
+            break;
+    }
+}
+
 /* Writing function for references to things. */
 void MVM_serialization_write_ref(MVMThreadContext *tc, MVMSerializationWriter *writer, MVMObject *ref) {
     assert(tc->allocate_in_gen2);
@@ -700,9 +753,6 @@ void MVM_serialization_write_ref(MVMThreadContext *tc, MVMSerializationWriter *w
         discrim = REFVAR_VM_NULL;
     }
     else if (REPR(ref)->ID == MVM_REPR_ID_MVMOSHandle) {
-        discrim = REFVAR_VM_NULL;
-    }
-    else if (REPR(ref)->ID == MVM_REPR_ID_MVMAddress) {
         discrim = REFVAR_VM_NULL;
     }
     else if (REPR(ref)->ID == MVM_REPR_ID_Decoder && IS_CONCRETE(ref)) {
@@ -748,6 +798,9 @@ void MVM_serialization_write_ref(MVMThreadContext *tc, MVMSerializationWriter *w
     }
     else if (REPR(ref)->ID == MVM_REPR_ID_SCRef && IS_CONCRETE(ref)) {
         discrim = REFVAR_SC_REF;
+    }
+    else if (REPR(ref)->ID == MVM_REPR_ID_MVMAddress) {
+        discrim = REFVAR_ADDRESS;
     }
     else {
         discrim = REFVAR_OBJECT;
@@ -797,6 +850,9 @@ void MVM_serialization_write_ref(MVMThreadContext *tc, MVMSerializationWriter *w
             MVM_serialization_write_str(tc, writer, handle);
             break;
         }
+        case REFVAR_ADDRESS:
+            write_address(tc, writer, ref);
+            break;
         default:
             MVM_exception_throw_adhoc(tc,
                 "Serialization Error: Unimplemented discriminator %d in MVM_serialization_read_ref",
@@ -1897,6 +1953,70 @@ static MVMObject * read_code_ref(MVMThreadContext *tc, MVMSerializationReader *r
     return MVM_sc_get_code(tc, sc, idx);
 }
 
+/* Reads in a network address. */
+static MVMObject * read_address(MVMThreadContext *tc, MVMSerializationReader *reader) {
+    MVMObject      *address = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    MVMAddressBody *body    = &((MVMAddress *)address)->body;
+    sa_family_t     family  = (sa_family_t)MVM_serialization_read_int(tc, reader);
+    switch (family) {
+        case AF_INET: {
+            struct sockaddr_in socket_address;
+            size_t             socket_address_size = sizeof(socket_address);
+
+            memset(&socket_address, 0, socket_address_size);
+            socket_address.sin_len         = socket_address_size;
+            socket_address.sin_family      = family;
+            socket_address.sin_addr.s_addr = (in_addr_t)MVM_serialization_read_int(tc, reader);
+            socket_address.sin_port        = (in_port_t)MVM_serialization_read_int(tc, reader);
+            memcpy(&body->storage, &socket_address, socket_address_size);
+            break;
+        }
+        case AF_INET6: {
+            struct sockaddr_in6 socket_address;
+            size_t              socket_address_size = sizeof(socket_address);
+            size_t              i;
+
+            memset(&socket_address, 0, socket_address_size);
+            socket_address.sin6_len    = socket_address_size;
+            socket_address.sin6_family = family;
+            for (i = 0; i < 4; ++i) {
+                size_t    j;
+                MVMuint32 dword = (MVMuint32)MVM_serialization_read_int(tc, reader);
+                for (j = 0; j < 4; ++j) {
+                    socket_address.sin6_addr.s6_addr[i * 4 + j] = (dword >> (3 - j) * 8) & 0xFF;
+                }
+            }
+            socket_address.sin6_flowinfo = (MVMuint32)MVM_serialization_read_int(tc, reader);
+            socket_address.sin6_scope_id = (MVMuint32)MVM_serialization_read_int(tc, reader);
+            memcpy(&body->storage, &socket_address, socket_address_size);
+            break;
+        }
+        case AF_UNIX: {
+#if defined(AF_UNIX)
+            struct sockaddr_un  socket_address;
+            size_t              socket_address_size = sizeof(socket_address);
+            char               *path                = MVM_serialization_read_cstr(tc, reader);
+            size_t              path_len            = strnlen(path, MAX_SUN_LEN);
+
+            memset(&socket_address, 0, socket_address_size);
+            socket_address.sun_len    = socket_address_size - sizeof(socket_address.sun_path) + path_len;
+            socket_address.sun_family = AF_UNIX;
+            memcpy(socket_address.sun_path, path, path_len);
+            memcpy(&body->storage, &socket_address, socket_address_size);
+            MVM_free(path);
+#else
+            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#endif
+            break;
+        }
+        default:
+            MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", family);
+            break;
+    }
+
+    return address;
+}
+
 /* Read the reference type discriminator from the buffer. */
 MVM_STATIC_INLINE MVMuint8 read_discrim(MVMThreadContext *tc, MVMSerializationReader *reader) {
     assert_can_read(tc, reader, 1);
@@ -1969,6 +2089,8 @@ MVMObject * MVM_serialization_read_ref(MVMThreadContext *tc, MVMSerializationRea
         case REFVAR_SC_REF:
             return (MVMObject *)MVM_sc_find_by_handle(tc,
                 MVM_serialization_read_str(tc, reader));
+        case REFVAR_ADDRESS:
+            return read_address(tc, reader);
         default:
             fail_deserialize(tc, NULL, reader,
                 "Serialization Error: Unimplemented case of read_ref");

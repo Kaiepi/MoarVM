@@ -6,6 +6,8 @@
 #define sa_family_t unsigned int
 #else
 #include <sys/un.h>
+
+static const size_t MAX_SUN_LEN = sizeof(((struct sockaddr_un *)NULL)->sun_path);
 #endif
 
 /* This representation's function pointer table. */
@@ -51,6 +53,11 @@ static const MVMStorageSpec * get_storage_spec(MVMThreadContext *tc, MVMSTable *
     return &storage_spec;
 }
 
+/* Sets the size of the STable. */
+static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSerializationReader *reader) {
+    st->size = sizeof(MVMAddress);
+}
+
 /* Compose the representation. */
 static void compose(MVMThreadContext *tc, MVMSTable *st, MVMObject *info) {
     /* Nothing doing. */
@@ -77,7 +84,7 @@ static const MVMREPROps MVMAddress_this_repr = {
     NULL, /* deserialize */
     NULL, /* serialize_repr_data */
     NULL, /* deserialize_repr_data */
-    NULL, /* deserialize_stable_size */
+    deserialize_stable_size,
     NULL, /* gc_mark */
     NULL, /* gc_free */
     NULL, /* gc_cleanup */
@@ -90,8 +97,6 @@ static const MVMREPROps MVMAddress_this_repr = {
     NULL, /* unmanaged_size */
     NULL, /* describe_refs */
 };
-
-static const size_t MAX_SUN_LEN = sizeof(((struct sockaddr_un *)NULL)->sun_path);
 
 sa_family_t MVM_address_to_native_family(MVMThreadContext *tc, MVMint64 family) {
     switch (family) {
@@ -304,8 +309,6 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
     } else {
         struct sockaddr_un socket_address;
         memset(&socket_address, 0, sizeof(socket_address));
-        /* XXX TODO: sun_len isn't POSIX... so what platforms don't have it and
-         * need to be handled differently? */
         socket_address.sun_len    = sizeof(socket_address) - sizeof(socket_address.sun_path) + sun_len;
         socket_address.sun_family = AF_UNIX;
         strcpy(socket_address.sun_path, path_cstr);
@@ -313,7 +316,7 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
 
         MVMROOT(tc, path, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-            memcpy(&address->body.storage, &socket_address, socket_address.sun_len);
+            memcpy(&address->body.storage, &socket_address, sizeof(socket_address));
         });
 
         return (MVMObject *)address;
@@ -338,7 +341,6 @@ MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *addres
                     presentation = MVM_string_ascii_decode_nt(tc, tc->instance->VMString, presentation_cstr);
                 });
             }
-
             break;
         }
         case AF_INET6: {
@@ -349,21 +351,27 @@ MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *addres
             if (inet_ntop(AF_INET6, native_address, presentation_cstr, sizeof(presentation_cstr)) == NULL)
                 MVM_exception_throw_adhoc(tc,
                     "Failed to format a presentation string for an IPv6 address: %s", strerror(errno));
-            else {
+            else
                 MVMROOT(tc, address, {
                     presentation = MVM_string_ascii_decode_nt(tc, tc->instance->VMString, presentation_cstr);
                 });
-            }
-
             break;
         }
         case AF_UNIX: {
+#ifdef AF_UNIX
             MVMROOT(tc, address, {
-                presentation = MVM_string_ascii_decode_nt(tc,
-                    tc->instance->VMString, ((struct sockaddr_un *)&address->body.storage)->sun_path);
+                struct sockaddr_un *socket_address = (struct sockaddr_un *)&address->body.storage;
+                presentation = MVM_string_latin1_decode(tc,
+                        tc->instance->VMString, socket_address->sun_path, socket_address->sun_len + 1);
             });
+#else
+            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#endif
             break;
         }
+        default:
+            MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", address->body.storage.ss_family);
+            break;
     }
 
     return presentation;
