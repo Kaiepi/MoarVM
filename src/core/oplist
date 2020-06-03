@@ -893,6 +893,7 @@ addrtopres          w(str) r(obj) :pure
 addrport            w(int64) r(obj) :pure
 addrflowinfo        w(int64) r(obj) :pure
 addrscopeid         w(int64) r(obj) :pure
+addrtonative        w(obj) r(obj) :pure :useshll
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.

@@ -376,3 +376,54 @@ MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *addres
 
     return presentation;
 }
+
+#define IN6_WORD_AT(a, x) ntohl(*(const MVMuint32 *)(&(a)[(x)]))
+
+MVMObject * MVM_address_to_native_address(MVMThreadContext *tc, MVMAddress *address) {
+    MVMObject *na_boxed;
+
+    switch (address->body.storage.ss_family) {
+        case AF_INET: {
+            in_addr_t native_address = ((struct sockaddr_in *)&address->body.storage)->sin_addr.s_addr;
+            MVMROOT(tc, address, {
+                na_boxed = MVM_repr_box_int(tc, MVM_hll_current(tc)->int_box_type, native_address);
+            });
+            break;
+        }
+        case AF_INET6: {
+            struct in6_addr  native_address = ((struct sockaddr_in6 *)&address->body.storage)->sin6_addr;
+            const MVMuint8  *na_bytes       = native_address.s6_addr;
+            char             na_str[33];
+            snprintf(na_str, 33,
+                "%08"PRIX32"%08"PRIX32"%08"PRIX32"%08"PRIX32"",
+                IN6_WORD_AT(na_bytes, 0), IN6_WORD_AT(na_bytes, 4), IN6_WORD_AT(na_bytes, 8), IN6_WORD_AT(na_bytes, 12));
+            MVMROOT(tc, address, {
+                MVMString *na_boxed_str = MVM_string_ascii_decode_nt(tc, tc->instance->VMString, na_str);
+                MVMROOT(tc, na_boxed_str, {
+                    MVMObject *radix = MVM_bigint_radix(tc, 16, na_boxed_str, 0, 0, MVM_hll_current(tc)->int_box_type);
+                    na_boxed = MVM_repr_at_pos_o(tc, radix, 0);
+                });
+            });
+            break;
+        }
+        case AF_UNIX: {
+#ifdef AF_UNIX
+            char *path_cstr = ((struct sockaddr_un *)&address->body.storage)->sun_path;
+            MVMROOT(tc, address, {
+                MVMString *path = MVM_string_latin1_decode(tc,
+                    tc->instance->VMString, path_cstr, strnlen(path_cstr, MAX_SUN_LEN));
+                MVMROOT(tc, path, {
+                    na_boxed = MVM_repr_box_str(tc, MVM_hll_current(tc)->str_box_type, path);
+                });
+            });
+#else
+            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#endif
+            break;
+        }
+        default:
+            MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", address->body.storage.ss_family);
+    }
+
+    return na_boxed;
+}

@@ -1,3 +1,5 @@
+/* TODO: Rename the MVM_SOCKET constants to MVM_ADDRESS. */
+
 #define MVM_SOCKET_FAMILY_UNSPEC 0
 #define MVM_SOCKET_FAMILY_INET   1
 #define MVM_SOCKET_FAMILY_INET6  2
@@ -44,3 +46,4 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
         MVMString *presentation, MVMuint16 port, MVMuint32 flowinfo, MVMuint32 scope_id);
 MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path);
 MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *address);
+MVMObject * MVM_address_to_native_address(MVMThreadContext *tc, MVMAddress *address);
