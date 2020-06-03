@@ -374,6 +374,11 @@ else {
     $config{heapsnapformat} = 2;
 }
 
+# TODO: --has-ares flag
+$config{moar_cincludes} .= ' ' . $defaults{ccinc} . '3rdparty/c-ares';
+$config{install}        .= "\t\$(MKPATH) \"\$(DESTDIR)\$(PREFIX)/include/c-ares\"\n"
+                         . "\t\$(CP) 3rdparty/c-ares/*.h \"\$(DESTDIR)\$(PREFIX)/include/c-ares\"\n";
+
 # mangle library names
 $config{ldlibs} = join ' ',
     $config{lincludes},
@@ -382,7 +387,8 @@ $config{ldlibs} = join ' ',
 $config{ldlibs} = ' -lasan ' . $config{ldlibs} if $args{asan} && $^O ne 'darwin' && $config{cc} ne 'clang';
 $config{ldlibs} = ' -lubsan ' . $config{ldlibs} if $args{ubsan} and $^O ne 'darwin';
 $config{ldlibs} = ' -ltsan ' . $config{ldlibs} if $args{tsan} and $^O ne 'darwin';
-$config{ldlibs} = $config{ldlibs} . ' -lzstd ' if $config{heapsnapformat} == 3;
+$config{ldlibs} = $config{ldlibs} . ' -lzstd' if $config{heapsnapformat} == 3;
+$config{ldlibs} = $config{ldlibs} . ' -lcares';
 # macro defs
 $config{ccdefflags} = join ' ', map { $config{ccdef} . $_ } @{$config{defs}};
 

@@ -73,16 +73,28 @@ our %TP_UV = (
     # the OS needs to provide a C<src> or C<objects> setting
 );
 
+our %TP_ARES = (
+    name  => 'cares',
+    path  => '3rdparty/c-ares',
+    rule  => 'cd 3rdparty/c-ares && '
+           . './buildconf && '
+           . 'CC=\'$(CC)\' ./configure --disable-shared --enable-nonblocking && '
+           . 'make libcares.la && '
+           . 'cp .libs/libcares.a .',
+    clean => 'cd 3rdparty/c-ares && make distclean && $(RM) libcares.a',
+);
+
 our %THIRDPARTY = (
-    lao => { %TP_LAO },
-    tom => { %TP_TOM },
-    sha => { %TP_SHA },
-    mt  => { %TP_MT },
-    dc  => { %TP_DC },
-    dcb => { %TP_DCB },
-    dl  => { %TP_DL },
-    uv  => { %TP_UVDUMMY },
-    cmp => { %TP_CMP },
+    lao  => { %TP_LAO },
+    tom  => { %TP_TOM },
+    sha  => { %TP_SHA },
+    mt   => { %TP_MT },
+    dc   => { %TP_DC },
+    dcb  => { %TP_DCB },
+    dl   => { %TP_DL },
+    uv   => { %TP_UVDUMMY },
+    cmp  => { %TP_CMP },
+    ares => { %TP_ARES },
 );
 
 # shell configuration
@@ -262,6 +274,12 @@ TERM
 
         dcb => { %TP_DCB, name => 'libdyncallback_s' },
         dl  => { %TP_DL, name => 'libdynload_s' },
+
+        ares => {
+            %TP_ARES,
+            rule  => 'cd 3rdparty/c-ares && buildconf.bat --disable-shared --enable-nonblocking && $(MAKE) libcares.la && cp .libs/libcares.a .',
+            clean => 'cd 3rdparty/c-ares && $(MAKE) distclean && $(RM) libcares.a',
+        },
     },
 );
 

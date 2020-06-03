@@ -31,6 +31,9 @@
 #include <dyncall_callback.h>
 #endif
 
+/* c-ares */
+#include <ares.h>
+
 /* forward declarations */
 #include "types.h"
 
