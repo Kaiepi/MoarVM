@@ -894,6 +894,7 @@ addrport            w(int64) r(obj) :pure
 addrflowinfo        w(int64) r(obj) :pure
 addrscopeid         w(int64) r(obj) :pure
 addrtonative        w(obj) r(obj) :pure :useshll
+asyncdnsquery       w(obj) r(obj) r(str) r(int64) r(int64) r(obj) r(obj) r(obj)
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.
