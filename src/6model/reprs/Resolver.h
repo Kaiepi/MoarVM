@@ -40,10 +40,8 @@ struct MVMResolverQueryInfo {
     MVMThreadContext   *tc;
     int                 work_idx;
     uv_loop_t          *loop;
-
     MVMResolverContext *context;
     ares_socket_t       connection;
-    uv_timer_t         *timer;
     uv_poll_t          *handle;
 };
 
