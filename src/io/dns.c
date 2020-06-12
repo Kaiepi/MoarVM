@@ -223,12 +223,12 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
                     MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
                     MVM_repr_push_o(tc, arr, task->body.schedulee);
                     MVMROOT(tc, arr, {
-                        MVMObject  *presentations;
-                        size_t      i;
+                        MVMObject *addresses;
+                        size_t     i;
 
-                        presentations = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+                        addresses = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
                         if (errstr) {
-                            MVMROOT(tc, presentations, {
+                            MVMROOT(tc, addresses, {
                                 MVMString *msg_string = MVM_string_ascii_decode_nt(tc,
                                     tc->instance->VMString, errstr);
                                 MVMROOT(tc, msg_string, {
@@ -241,23 +241,21 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
                         else {
                             MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
                             for (i = 0; host->h_addr_list[i]; ++i) {
-                                struct in_addr *native_address;
-                                char            presentation_cstr[INET_ADDRSTRLEN];
-
-                                native_address = (struct in_addr *)host->h_addr_list[i];
-                                inet_ntop(AF_INET, native_address, presentation_cstr, sizeof(presentation_cstr));
-                                MVMROOT(tc, presentations, {
-                                    MVMString *presentation = MVM_string_ascii_decode_nt(tc,
-                                        tc->instance->VMString, presentation_cstr);
-                                    MVMROOT(tc, presentation, {
-                                        MVMObject *presentation_box = MVM_repr_box_str(tc,
-                                            tc->instance->boot_types.BOOTStr, presentation);
-                                        MVM_repr_push_o(tc, presentations, presentation_box);
-                                    });
+                                struct in_addr     *native_address = (struct in_addr *)host->h_addr_list[i];
+                                struct sockaddr_in  socket_address;
+                                memset(&socket_address, 0, sizeof(socket_address));
+                                socket_address.sin_len    = sizeof(socket_address);
+                                socket_address.sin_family = AF_INET;
+                                memcpy(&socket_address.sin_addr, native_address, sizeof(struct in_addr));
+                                MVMROOT(tc, addresses, {
+                                    MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
+                                        tc->instance->boot_types.BOOTAddress);
+                                    memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
+                                    MVM_repr_push_o(tc, addresses, (MVMObject *)address);
                                 });
                             }
                         }
-                        MVM_repr_push_o(tc, arr, presentations);
+                        MVM_repr_push_o(tc, arr, addresses);
                         MVM_repr_push_o(tc, task->body.queue, arr);
                     });
                 });
@@ -276,12 +274,12 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
                     MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
                     MVM_repr_push_o(tc, arr, task->body.schedulee);
                     MVMROOT(tc, arr, {
-                        MVMObject  *presentations;
-                        size_t      i;
+                        MVMObject *addresses;
+                        size_t     i;
 
-                        presentations = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+                        addresses = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
                         if (errstr) {
-                            MVMROOT(tc, presentations, {
+                            MVMROOT(tc, addresses, {
                                 MVMString *msg_string = MVM_string_ascii_decode_nt(tc,
                                     tc->instance->VMString, errstr);
                                 MVMROOT(tc, msg_string, {
@@ -290,28 +288,26 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
                                     MVM_repr_push_o(tc, arr, msg_box);
                                 });
                             });
-                            MVM_repr_push_o(tc, arr, presentations);
+                            MVM_repr_push_o(tc, arr, addresses);
                         }
                         else {
                             MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
                             for (i = 0; host->h_addr_list[i]; ++i) {
-                                struct in6_addr *native_address;
-                                char             presentation_cstr[INET6_ADDRSTRLEN];
-
-                                native_address = (struct in6_addr *)host->h_addr_list[i];
-                                inet_ntop(AF_INET6, native_address, presentation_cstr, sizeof(presentation_cstr));
-                                MVMROOT(tc, presentations, {
-                                    MVMString *presentation = MVM_string_ascii_decode_nt(tc,
-                                        tc->instance->VMString, presentation_cstr);
-                                    MVMROOT(tc, presentation, {
-                                        MVMObject *presentation_box = MVM_repr_box_str(tc,
-                                            tc->instance->boot_types.BOOTStr, presentation);
-                                        MVM_repr_push_o(tc, presentations, presentation_box);
-                                    });
+                                struct in6_addr     *native_address = (struct in6_addr *)host->h_addr_list[i];
+                                struct sockaddr_in6  socket_address;
+                                memset(&socket_address, 0, sizeof(socket_address));
+                                socket_address.sin6_len    = sizeof(socket_address);
+                                socket_address.sin6_family = AF_INET6;
+                                memcpy(&socket_address.sin6_addr, native_address, sizeof(struct in6_addr));
+                                MVMROOT(tc, addresses, {
+                                    MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
+                                        tc->instance->boot_types.BOOTAddress);
+                                    memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
+                                    MVM_repr_push_o(tc, addresses, (MVMObject *)address);
                                 });
                             }
                         }
-                        MVM_repr_push_o(tc, arr, presentations);
+                        MVM_repr_push_o(tc, arr, addresses);
                         MVM_repr_push_o(tc, task->body.queue, arr);
                     });
                 });
