@@ -5790,14 +5790,18 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 goto NEXT;
             }
             OP(addrtonative): {
-                MVMObject *address = GET_REG(cur_op, 2).o;
-                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
-                    GET_REG(cur_op, 0).o = MVM_address_to_native_address(tc, (MVMAddress *)address);
-                else
+                MVMObject *address  = GET_REG(cur_op, 2).o;
+                MVMObject *buf_type = GET_REG(cur_op, 4).o;
+                if (REPR(address)->ID != MVM_REPR_ID_MVMAddress || !IS_CONCRETE(address))
                     MVM_exception_throw_adhoc(tc,
                         "addrtonative requires a concrete object with REPR MVMAddress, got %s (%s)",
                         REPR(address)->name, MVM_6model_get_debug_name(tc, address));
-                cur_op += 4;
+                if (REPR(buf_type)->ID != MVM_REPR_ID_VMArray)
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtonative requires an object with REPR VMArray, got %s (%s)",
+                        REPR(buf_type)->name, MVM_6model_get_debug_name(tc, buf_type));
+                GET_REG(cur_op, 0).o = MVM_address_to_native_address(tc, (MVMAddress *)address, (MVMArray *)buf_type);
+                cur_op += 6;
                 goto NEXT;
             }
             OP(asyncdnsquery): {

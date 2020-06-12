@@ -837,7 +837,7 @@ BEGIN {
     2099,
     2101,
     2103,
-    2105);
+    2106);
     MAST::Ops.WHO<@counts> := nqp::list_i(0,
     2,
     2,
@@ -1671,7 +1671,7 @@ BEGIN {
     2,
     2,
     2,
-    2,
+    3,
     8);
     MAST::Ops.WHO<@values> := nqp::list_i(10,
     8,
@@ -3777,6 +3777,7 @@ BEGIN {
     34,
     65,
     66,
+    65,
     65,
     66,
     65,
@@ -11741,12 +11742,13 @@ BEGIN {
         my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
     },
-    'addrtonative', sub ($op0, $op1) {
+    'addrtonative', sub ($op0, $op1, $op2) {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
         nqp::writeuint($bytecode, $elems, 833, 5);
         my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
+        my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
     },
     'asyncdnsquery', sub ($op0, $op1, $op2, $op3, $op4, $op5, $op6, $op7) {
         my $bytecode := $*MAST_FRAME.bytecode;

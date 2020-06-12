@@ -893,7 +893,7 @@ addrtopres          w(str) r(obj) :pure
 addrport            w(int64) r(obj) :pure
 addrflowinfo        w(int64) r(obj) :pure
 addrscopeid         w(int64) r(obj) :pure
-addrtonative        w(obj) r(obj) :pure :useshll
+addrtonative        w(obj) r(obj) r(obj) :pure
 asyncdnsquery       w(obj) r(obj) r(str) r(int64) r(int64) r(obj) r(obj) r(obj)
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
