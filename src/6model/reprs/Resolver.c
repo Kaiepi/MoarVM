@@ -21,13 +21,27 @@ static MVMObject * type_object_for(MVMThreadContext *tc, MVMObject *HOW) {
 /* Initializes a new instance. */
 static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data) {
     MVMResolverBody *body;
-    int              error;
+    size_t           i;
 
     body = (MVMResolverBody *)data;
-    if ((error = ares_init(&body->channel)))
-        MVM_exception_throw_adhoc(tc, "Failed to initialize a DNS context: %s", ares_strerror(error));
-    body->mutex_pending_queries = MVM_malloc(sizeof(uv_mutex_t));
-    uv_mutex_init(body->mutex_pending_queries);
+    for (i = 0; i < MVM_RESOLVER_CONTEXTS; ++i) {
+        MVMResolverContext *context;
+        int                 error;
+
+        context = &body->contexts[i];
+        if ((error = ares_init(&context->channel)))
+            MVM_exception_throw_adhoc(tc,
+                "Failed to initialize a DNS context: %s",
+                ares_strerror(error));
+
+        context->rwlock_query_info = MVM_malloc(sizeof(uv_rwlock_t));
+        if ((error = uv_rwlock_init(context->rwlock_query_info)))
+            MVM_exception_throw_adhoc(tc,
+                "Failed to initialize a DNS context: %s",
+                ares_strerror(error));
+    }
+    body->sem_contexts = MVM_malloc(sizeof(uv_sem_t));
+    uv_sem_init(body->sem_contexts, MVM_RESOLVER_CONTEXTS);
 }
 
 /* Copies to the body of one object to another. */
@@ -57,13 +71,27 @@ static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerial
 /* Deserializes the data. */
 static void deserialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data, MVMSerializationReader *reader) {
     MVMResolverBody *body;
-    int              error;
+    size_t           i;
 
     body = (MVMResolverBody *)data;
-    if ((error = ares_init(&body->channel)))
-        MVM_exception_throw_adhoc(tc, "Failed to initialize DNS context: %s", ares_strerror(error));
-    body->mutex_pending_queries = MVM_malloc(sizeof(uv_mutex_t));
-    uv_mutex_init(body->mutex_pending_queries);
+    for (i = 0; i < MVM_RESOLVER_CONTEXTS; ++i) {
+        MVMResolverContext *context;
+        int                 error;
+
+        context = &body->contexts[i];
+        if ((error = ares_init(&context->channel)))
+            MVM_exception_throw_adhoc(tc,
+                "Failed to initialize a DNS context: %s",
+                ares_strerror(error));
+
+        context->rwlock_query_info = MVM_malloc(sizeof(uv_rwlock_t));
+        if ((error = uv_rwlock_init(context->rwlock_query_info)))
+            MVM_exception_throw_adhoc(tc,
+                "Failed to initialize a DNS context: %s",
+                ares_strerror(error));
+    }
+    body->sem_contexts = MVM_malloc(sizeof(uv_sem_t));
+    uv_sem_init(body->sem_contexts, MVM_RESOLVER_CONTEXTS);
 }
 
 /* Sets the size of the STable. */
@@ -73,10 +101,17 @@ static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSeri
 
 /* Called by the VM in order to free memory associated with this object. */
 static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
-    MVMResolver *resolver = (MVMResolver *)obj;
-    ares_cancel(resolver->body.channel);
-    ares_destroy(resolver->body.channel);
-    uv_mutex_destroy(resolver->body.mutex_pending_queries);
+    MVMResolver *resolver;
+    size_t       i;
+
+    resolver = (MVMResolver *)obj;
+    for (i = 0; i < MVM_RESOLVER_CONTEXTS; ++i) {
+        MVMResolverContext *context = &resolver->body.contexts[i];
+        ares_cancel(context->channel);
+        ares_destroy(context->channel);
+        uv_rwlock_destroy(context->rwlock_query_info);
+    }
+    uv_sem_destroy(resolver->body.sem_contexts);
 }
 
 /* Composes the representation. */
@@ -86,14 +121,7 @@ static void compose(MVMThreadContext *tc, MVMSTable *st, MVMObject *info) {
 
 /* Calculates the non-GC-managed memory we hold on to. */
 static MVMuint64 unmanaged_size(MVMThreadContext *tc, MVMSTable *st, void *data) {
-    MVMResolverBody *body;
-    size_t           pending_queries_size;
-
-    body = (MVMResolverBody *)data;
-    uv_mutex_lock(body->mutex_pending_queries);
-    pending_queries_size = body->pending_queries_size;
-    uv_mutex_unlock(body->mutex_pending_queries);
-    return sizeof(MVMResolverQueryInfo) * pending_queries_size + sizeof(uv_mutex_t);
+    return MVM_RESOLVER_CONTEXTS * (sizeof(MVMResolverQueryInfo) + sizeof(uv_rwlock_t)) + sizeof(uv_sem_t);
 }
 
 /* Initializes the representation. */

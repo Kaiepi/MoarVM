@@ -305,3 +305,4 @@ typedef struct MVMAddressBody MVMAddressBody;
 typedef struct MVMResolver MVMResolver;
 typedef struct MVMResolverBody MVMResolverBody;
 typedef struct MVMResolverQueryInfo MVMResolverQueryInfo;
+typedef struct MVMResolverContext MVMResolverContext;
