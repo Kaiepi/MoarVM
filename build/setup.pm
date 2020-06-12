@@ -75,13 +75,12 @@ our %TP_UV = (
 
 our %TP_ARES = (
     name  => 'cares',
-    path  => '3rdparty/c-ares',
+    path  => '3rdparty/c-ares/.libs',
     rule  => 'cd 3rdparty/c-ares && '
            . './buildconf && '
            . 'CC=\'$(CC)\' ./configure --disable-shared --enable-nonblocking && '
-           . 'make libcares.la && '
-           . 'cp .libs/libcares.a .',
-    clean => 'cd 3rdparty/c-ares && make distclean && $(RM) libcares.a',
+           . 'make libcares.la',
+    clean => 'cd 3rdparty/c-ares && make clean',
 );
 
 our %THIRDPARTY = (
