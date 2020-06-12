@@ -837,7 +837,9 @@ BEGIN {
     2099,
     2101,
     2103,
-    2106);
+    2106,
+    2114,
+    2117);
     MAST::Ops.WHO<@counts> := nqp::list_i(0,
     2,
     2,
@@ -1672,7 +1674,9 @@ BEGIN {
     2,
     2,
     3,
-    8);
+    8,
+    3,
+    5);
     MAST::Ops.WHO<@values> := nqp::list_i(10,
     8,
     18,
@@ -3786,7 +3790,15 @@ BEGIN {
     33,
     65,
     65,
-    65);
+    65,
+    66,
+    65,
+    33,
+    66,
+    65,
+    33,
+    33,
+    33);
     MAST::Ops.WHO<%codes> := nqp::hash('no_op', 0,
     'const_i8', 1,
     'const_i16', 2,
@@ -4613,15 +4625,17 @@ BEGIN {
     'nextdispatcherfor', 823,
     'takenextdispatcher', 824,
     'getaddrinfo', 825,
-    'addrfromipv4', 826,
-    'addrfromipv6', 827,
+    'addrfromipv4pres', 826,
+    'addrfromipv6pres', 827,
     'addrfrompath', 828,
     'addrtopres', 829,
     'addrport', 830,
     'addrflowinfo', 831,
     'addrscopeid', 832,
     'addrtonative', 833,
-    'asyncdnsquery', 834);
+    'asyncdnsquery', 834,
+    'addrfromipv4native', 835,
+    'addrfromipv6native', 836);
     MAST::Ops.WHO<@names> := nqp::list_s('no_op',
     'const_i8',
     'const_i16',
@@ -5448,15 +5462,17 @@ BEGIN {
     'nextdispatcherfor',
     'takenextdispatcher',
     'getaddrinfo',
-    'addrfromipv4',
-    'addrfromipv6',
+    'addrfromipv4pres',
+    'addrfromipv6pres',
     'addrfrompath',
     'addrtopres',
     'addrport',
     'addrflowinfo',
     'addrscopeid',
     'addrtonative',
-    'asyncdnsquery');
+    'asyncdnsquery',
+    'addrfromipv4native',
+    'addrfromipv6native');
     MAST::Ops.WHO<%generators> := nqp::hash('no_op', sub () {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
@@ -11689,7 +11705,7 @@ BEGIN {
         my uint $index5 := nqp::unbox_u($op5); nqp::writeuint($bytecode, nqp::add_i($elems, 12), $index5, 5);
         my uint $index6 := nqp::unbox_u($op6); nqp::writeuint($bytecode, nqp::add_i($elems, 14), $index6, 5);
     },
-    'addrfromipv4', sub ($op0, $op1, $op2) {
+    'addrfromipv4pres', sub ($op0, $op1, $op2) {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
         nqp::writeuint($bytecode, $elems, 826, 5);
@@ -11697,7 +11713,7 @@ BEGIN {
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
         my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
     },
-    'addrfromipv6', sub ($op0, $op1, $op2, $op3, $op4) {
+    'addrfromipv6pres', sub ($op0, $op1, $op2, $op3, $op4) {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
         nqp::writeuint($bytecode, $elems, 827, 5);
@@ -11762,5 +11778,23 @@ BEGIN {
         my uint $index5 := nqp::unbox_u($op5); nqp::writeuint($bytecode, nqp::add_i($elems, 12), $index5, 5);
         my uint $index6 := nqp::unbox_u($op6); nqp::writeuint($bytecode, nqp::add_i($elems, 14), $index6, 5);
         my uint $index7 := nqp::unbox_u($op7); nqp::writeuint($bytecode, nqp::add_i($elems, 16), $index7, 5);
+    },
+    'addrfromipv4native', sub ($op0, $op1, $op2) {
+        my $bytecode := $*MAST_FRAME.bytecode;
+        my uint $elems := nqp::elems($bytecode);
+        nqp::writeuint($bytecode, $elems, 835, 5);
+        my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
+        my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
+        my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
+    },
+    'addrfromipv6native', sub ($op0, $op1, $op2, $op3, $op4) {
+        my $bytecode := $*MAST_FRAME.bytecode;
+        my uint $elems := nqp::elems($bytecode);
+        nqp::writeuint($bytecode, $elems, 836, 5);
+        my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
+        my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
+        my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
+        my uint $index3 := nqp::unbox_u($op3); nqp::writeuint($bytecode, nqp::add_i($elems, 8), $index3, 5);
+        my uint $index4 := nqp::unbox_u($op4); nqp::writeuint($bytecode, nqp::add_i($elems, 10), $index4, 5);
     });
 }

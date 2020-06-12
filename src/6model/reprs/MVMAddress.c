@@ -253,6 +253,34 @@ MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
     return (MVMObject *)address;
 }
 
+MVMObject * MVM_address_from_ipv4_native(MVMThreadContext *tc, MVMArray *native_address_buf, MVMuint16 port) {
+    if (((MVMArrayREPRData *)STABLE(native_address_buf)->REPR_data)->slot_type != MVM_ARRAY_U8)
+        MVM_exception_throw_adhoc(tc, "addrfromipv4native buffer type must be an array of uint8");
+    else {
+        struct in_addr      native_address;
+        struct sockaddr_in  socket_address;
+        MVMAddress         *address;
+        size_t              i;
+
+        memset(&native_address, 0, sizeof(native_address));
+        for (i = 4; i--;)
+            native_address.s_addr = native_address.s_addr << 8
+                                  | (MVMuint8)MVM_repr_at_pos_i(tc, (MVMObject *)native_address_buf, i);
+
+        memset(&socket_address, 0, sizeof(socket_address));
+        socket_address.sin_len    = sizeof(socket_address);
+        socket_address.sin_family = AF_INET;
+        socket_address.sin_port   = htons(port);
+        memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
+
+        MVMROOT(tc, native_address_buf, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
+        });
+        return (MVMObject *)address;
+    }
+}
+
 MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
         MVMString *presentation, MVMuint16 port, MVMuint32 flowinfo, MVMuint32 scope_id) {
     MVMAddress      *address;
@@ -289,6 +317,36 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
     }
 
     return (MVMObject *)address;
+}
+
+MVMObject * MVM_address_from_ipv6_native(MVMThreadContext *tc,
+        MVMArray *native_address_buf, MVMuint16 port, MVMuint32 flowinfo, MVMuint32 scope_id) {
+    if (((MVMArrayREPRData *)STABLE(native_address_buf)->REPR_data)->slot_type != MVM_ARRAY_U8)
+        MVM_exception_throw_adhoc(tc, "addrfromipv6native buffer type must be an array of uint8");
+    else {
+        struct in6_addr      native_address;
+        struct sockaddr_in6  socket_address;
+        MVMAddress          *address;
+        size_t               i;
+
+        memset(&native_address, 0, sizeof(native_address));
+        for (i = 0; i < 16; ++i)
+            native_address.s6_addr[i] = (MVMuint8)MVM_repr_at_pos_i(tc, (MVMObject *)native_address_buf, i);
+
+        memset(&socket_address, 0, sizeof(socket_address));
+        socket_address.sin6_len      = sizeof(socket_address);
+        socket_address.sin6_family   = AF_INET6;
+        socket_address.sin6_port     = htons(port);
+        socket_address.sin6_flowinfo = htonl(flowinfo);
+        memcpy(&socket_address.sin6_addr, &native_address, sizeof(native_address));
+        socket_address.sin6_scope_id = scope_id;
+
+        MVMROOT(tc, native_address_buf, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
+        });
+        return (MVMObject *)address;
+    }
 }
 
 MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {

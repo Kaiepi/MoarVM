@@ -5730,12 +5730,12 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     GET_REG(cur_op, 12).i64);
                 cur_op += 14;
                 goto NEXT;
-            OP(addrfromipv4):
+            OP(addrfromipv4pres):
                 GET_REG(cur_op, 0).o = MVM_address_from_ipv4_presentation(tc,
                     GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64);
                 cur_op += 6;
                 goto NEXT;
-            OP(addrfromipv6):
+            OP(addrfromipv6pres):
                 GET_REG(cur_op, 0).o = MVM_address_from_ipv6_presentation(tc,
                     GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64,
                     (MVMuint32)GET_REG(cur_op, 6).i64, (MVMuint32)GET_REG(cur_op, 8).i64);
@@ -5809,6 +5809,31 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     GET_REG(cur_op, 2).o, GET_REG(cur_op, 4).s, GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64,
                     GET_REG(cur_op, 10).o, GET_REG(cur_op, 12).o, GET_REG(cur_op, 14).o);
                 cur_op += 16;
+                goto NEXT;
+            }
+            OP(addrfromipv4native): {
+                MVMObject *native_address_buf = GET_REG(cur_op, 2).o;
+                if (REPR(native_address_buf)-> ID == MVM_REPR_ID_VMArray && IS_CONCRETE(native_address_buf))
+                    GET_REG(cur_op, 0).o = MVM_address_from_ipv4_native(tc,
+                        (MVMArray *)native_address_buf, (MVMuint16)GET_REG(cur_op, 4).i64);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrfromipv4native requires a concrete object with REPR VMArray, got %s (%s)",
+                        REPR(native_address_buf)->name, MVM_6model_get_debug_name(tc, native_address_buf));
+                cur_op += 6;
+                goto NEXT;
+            }
+            OP(addrfromipv6native): {
+                MVMObject *native_address_buf = GET_REG(cur_op, 2).o;
+                if (REPR(native_address_buf)-> ID == MVM_REPR_ID_VMArray && IS_CONCRETE(native_address_buf))
+                    GET_REG(cur_op, 0).o = MVM_address_from_ipv6_native(tc,
+                        (MVMArray *)native_address_buf, (MVMuint16)GET_REG(cur_op, 4).i64,
+                        (MVMuint32)GET_REG(cur_op, 6).i64, (MVMuint32)GET_REG(cur_op, 8).i64);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrfromipv6native requires a concrete object with REPR VMArray, got %s (%s)",
+                        REPR(native_address_buf)->name, MVM_6model_get_debug_name(tc, native_address_buf));
+                cur_op += 10;
                 goto NEXT;
             }
             OP(sp_guard): {

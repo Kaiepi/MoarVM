@@ -886,8 +886,8 @@ totalmem            w(int64) :pure
 nextdispatcherfor   r(obj) r(obj)
 takenextdispatcher  w(obj) :noinline
 getaddrinfo         w(obj) r(str) r(int64) r(int64) r(int64) r(int64) r(int64)
-addrfromipv4        w(obj) r(str) r(int64) :pure
-addrfromipv6        w(obj) r(str) r(int64) r(int64) r(int64) :pure
+addrfromipv4pres    w(obj) r(str) r(int64) :pure
+addrfromipv6pres    w(obj) r(str) r(int64) r(int64) r(int64) :pure
 addrfrompath        w(obj) r(str) :pure
 addrtopres          w(str) r(obj) :pure
 addrport            w(int64) r(obj) :pure
@@ -895,6 +895,8 @@ addrflowinfo        w(int64) r(obj) :pure
 addrscopeid         w(int64) r(obj) :pure
 addrtonative        w(obj) r(obj) r(obj) :pure
 asyncdnsquery       w(obj) r(obj) r(str) r(int64) r(int64) r(obj) r(obj) r(obj)
+addrfromipv4native  w(obj) r(obj) r(int64) :pure
+addrfromipv6native  w(obj) r(obj) r(int64) r(int64) r(int64) :pure
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.
