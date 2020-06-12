@@ -5,7 +5,9 @@
 struct MVMResolverQueryInfo;
 
 /* A DNS resolution context. This keeps track of state pertaining to DNS
- * resolution that is persistent between queries. */
+ * resolution that is persistent between queries. This struct exists because
+ * c-ares' ares_query doesn't behave properly when DNS queries are made from
+ * multiple threads over one DNS channel. */
 struct MVMResolverContext {
     /* The c-ares channel to use with this context. */
     ares_channel          channel;
