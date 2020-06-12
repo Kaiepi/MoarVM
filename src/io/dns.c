@@ -417,7 +417,7 @@ static const MVMAsyncTaskOps query_op_table = {
 };
 
 MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
-        MVMObject *resolver, MVMString *question, MVMint64 type, MVMint64 class,
+        MVMObject *resolver, MVMString *question, MVMint64 class, MVMint64 type,
         MVMObject *queue, MVMObject *schedulee, MVMObject *async_type) {
     MVMAsyncTask         *task;
     MVMResolverQueryInfo *qi;
@@ -436,6 +436,13 @@ MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
             "asyncdnsquery async task type must have the AsyncTask REPR (got %s)",
             MVM_6model_get_stable_debug_name(tc, async_type->st));
 
+    switch (class) {
+        case MVM_DNS_RECORD_CLASS_IN:
+            break;
+        default:
+            MVM_exception_throw_adhoc(tc, "Unsupported DNS record class: %"PRIi64"", class);
+    }
+
     switch (type) {
         case MVM_DNS_RECORD_TYPE_A:
         case MVM_DNS_RECORD_TYPE_AAAA:
@@ -443,13 +450,6 @@ MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
         default:
             MVM_exception_throw_adhoc(tc, "Unsupported DNS record type: %"PRIi64"", type);
             break;
-    }
-
-    switch (class) {
-        case MVM_DNS_RECORD_CLASS_IN:
-            break;
-        default:
-            MVM_exception_throw_adhoc(tc, "Unsupported DNS record class: %"PRIi64"", class);
     }
 
     /* Create the async task handle. */
@@ -462,8 +462,8 @@ MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
         qi = MVM_calloc(1, sizeof(MVMResolverQueryInfo));
         MVM_ASSIGN_REF(tc, &(task->common.header), qi->resolver, resolver);
         qi->question    = MVM_string_utf8_encode_C_string(tc, question);
-        qi->type        = (int)type;
         qi->class       = (int)class;
+        qi->type        = (int)type;
         task->body.data = qi;
 
         /* Hand the task off to the event loop. */

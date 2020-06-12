@@ -36,8 +36,8 @@ struct MVMResolver {
 struct MVMResolverQueryInfo {
     MVMResolver *resolver;
     char        *question;
-    int          type;
     int          class;
+    int          type;
 
     MVMThreadContext   *tc;
     int                 work_idx;

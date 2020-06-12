@@ -9,5 +9,5 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
         MVMint64 passive);
 
 MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
-        MVMObject *resolver, MVMString *question, MVMint64 type, MVMint64 class,
+        MVMObject *resolver, MVMString *question, MVMint64 class, MVMint64 type,
         MVMObject *queue, MVMObject *schedulee, MVMObject *async_type);
