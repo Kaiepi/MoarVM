@@ -20,28 +20,31 @@ static MVMObject * type_object_for(MVMThreadContext *tc, MVMObject *HOW) {
 
 /* Initializes a new instance. */
 static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data) {
-    MVMResolverBody *body;
-    size_t           i;
+    MVMResolverBody    *body;
+    MVMResolverContext *context;
+    int                 error;
+
+    if (!ares_library_initialized()
+     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc)))
+        MVM_exception_throw_adhoc(tc,
+            "Failed to initialize a DNS resolution context: %s",
+            ares_strerror(error));
 
     body = (MVMResolverBody *)data;
-    for (i = 0; i < MVM_RESOLVER_CONTEXTS; ++i) {
-        MVMResolverContext *context;
-        int                 error;
-
-        context = &body->contexts[i];
+    for (context = body->contexts; context != body->contexts + MVM_RESOLVER_POOL_SIZE; ++context) {
         if ((error = ares_init(&context->channel)))
             MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS context: %s",
+                "Failed to initialize a DNS resolution context: %s",
                 ares_strerror(error));
-
-        context->rwlock_query_info = MVM_malloc(sizeof(uv_rwlock_t));
-        if ((error = uv_rwlock_init(context->rwlock_query_info)))
+        if ((error = uv_sem_init(&context->sem_query, 1)))
             MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS context: %s",
-                ares_strerror(error));
+                "Failed to initialize a DNS resolution context: %s",
+                uv_strerror(error));
     }
-    body->sem_contexts = MVM_malloc(sizeof(uv_sem_t));
-    uv_sem_init(body->sem_contexts, MVM_RESOLVER_CONTEXTS);
+    if ((error = uv_sem_init(&body->sem_contexts, MVM_RESOLVER_POOL_SIZE)))
+        MVM_exception_throw_adhoc(tc,
+            "Failed to initialize a DNS resolution context: %s",
+            uv_strerror(error));
 }
 
 /* Copies to the body of one object to another. */
@@ -70,28 +73,31 @@ static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerial
 
 /* Deserializes the data. */
 static void deserialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data, MVMSerializationReader *reader) {
-    MVMResolverBody *body;
-    size_t           i;
+    MVMResolverBody    *body;
+    MVMResolverContext *context;
+    int                 error;
+
+    if (!ares_library_initialized()
+     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc)))
+        MVM_exception_throw_adhoc(tc,
+            "Failed to initialize a DNS resolution context: %s",
+            ares_strerror(error));
 
     body = (MVMResolverBody *)data;
-    for (i = 0; i < MVM_RESOLVER_CONTEXTS; ++i) {
-        MVMResolverContext *context;
-        int                 error;
-
-        context = &body->contexts[i];
+    for (context = body->contexts; context != body->contexts + MVM_RESOLVER_POOL_SIZE; ++context) {
         if ((error = ares_init(&context->channel)))
             MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS context: %s",
+                "Failed to initialize a DNS resolution context: %s",
                 ares_strerror(error));
-
-        context->rwlock_query_info = MVM_malloc(sizeof(uv_rwlock_t));
-        if ((error = uv_rwlock_init(context->rwlock_query_info)))
+        if ((error = uv_sem_init(&context->sem_query, 1)))
             MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS context: %s",
-                ares_strerror(error));
+                "Failed to initialize a DNS resolution context: %s",
+                uv_strerror(error));
     }
-    body->sem_contexts = MVM_malloc(sizeof(uv_sem_t));
-    uv_sem_init(body->sem_contexts, MVM_RESOLVER_CONTEXTS);
+    if ((error = uv_sem_init(&body->sem_contexts, MVM_RESOLVER_POOL_SIZE)))
+        MVM_exception_throw_adhoc(tc,
+            "Failed to initialize a DNS resolution context: %s",
+            uv_strerror(error));
 }
 
 /* Sets the size of the STable. */
@@ -101,27 +107,24 @@ static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSeri
 
 /* Called by the VM in order to free memory associated with this object. */
 static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
-    MVMResolver *resolver;
-    size_t       i;
+    MVMResolver        *resolver;
+    MVMResolverContext *context;
 
     resolver = (MVMResolver *)obj;
-    for (i = 0; i < MVM_RESOLVER_CONTEXTS; ++i) {
-        MVMResolverContext *context = &resolver->body.contexts[i];
-        ares_cancel(context->channel);
+    for (context = resolver->body.contexts; context != resolver->body.contexts + MVM_RESOLVER_POOL_SIZE; ++context) {
         ares_destroy(context->channel);
-        uv_rwlock_destroy(context->rwlock_query_info);
+        uv_sem_destroy(&context->sem_query);
     }
-    uv_sem_destroy(resolver->body.sem_contexts);
+    uv_sem_destroy(&resolver->body.sem_contexts);
+
+    /* XXX: Belongs elsewhere. */
+    if (ares_library_initialized())
+        ares_library_cleanup();
 }
 
 /* Composes the representation. */
 static void compose(MVMThreadContext *tc, MVMSTable *st, MVMObject *info) {
     /* Nothing doing. */
-}
-
-/* Calculates the non-GC-managed memory we hold on to. */
-static MVMuint64 unmanaged_size(MVMThreadContext *tc, MVMSTable *st, void *data) {
-    return MVM_RESOLVER_CONTEXTS * (sizeof(MVMResolverQueryInfo) + sizeof(uv_rwlock_t)) + sizeof(uv_sem_t);
 }
 
 /* Initializes the representation. */
@@ -155,6 +158,6 @@ static const MVMREPROps Resolver_this_repr = {
     NULL, /* spesh */
     "Resolver", /* name */
     MVM_REPR_ID_MVMResolver,
-    unmanaged_size,
+    NULL, /* unmanaged_size */
     NULL, /* describe_refs */
 };
