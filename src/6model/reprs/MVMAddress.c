@@ -449,7 +449,7 @@ MVMObject * MVM_address_to_native_address(MVMThreadContext *tc, MVMAddress *addr
                 address_bytes[1] = address_word >> 8 & 0xFF;
                 address_bytes[2] = address_word >> 16 & 0xFF;
                 address_bytes[3] = address_word >> 24;
-                MVMROOT(tc, address, {
+                MVMROOT2(tc, address, buf_type, {
                     buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
                     buf->body.slots.u8 = address_bytes;
                     buf->body.start    = 0;
@@ -467,7 +467,7 @@ MVMObject * MVM_address_to_native_address(MVMThreadContext *tc, MVMAddress *addr
                 address_bytes  = MVM_calloc(16, sizeof(MVMuint8));
                 for (i = 0; i < 16; ++i)
                     address_bytes[i] = native_address.s6_addr[i];
-                MVMROOT(tc, address, {
+                MVMROOT2(tc, address, buf_type, {
                     buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
                     buf->body.slots.u8 = address_bytes;
                     buf->body.start    = 0;
