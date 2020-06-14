@@ -100,13 +100,13 @@ static const MVMREPROps MVMAddress_this_repr = {
 
 sa_family_t MVM_address_to_native_family(MVMThreadContext *tc, MVMint64 family) {
     switch (family) {
-        case MVM_SOCKET_FAMILY_UNSPEC:
+        case MVM_ADDRESS_FAMILY_UNSPEC:
             return PF_UNSPEC;
-        case MVM_SOCKET_FAMILY_INET:
+        case MVM_ADDRESS_FAMILY_INET:
             return PF_INET;
-        case MVM_SOCKET_FAMILY_INET6:
+        case MVM_ADDRESS_FAMILY_INET6:
             return PF_INET6;
-        case MVM_SOCKET_FAMILY_UNIX:
+        case MVM_ADDRESS_FAMILY_UNIX:
             return PF_UNIX;
         default:
             MVM_exception_throw_adhoc(tc, "Unknown network address family: %"PRIi64"", family);
@@ -116,13 +116,13 @@ sa_family_t MVM_address_to_native_family(MVMThreadContext *tc, MVMint64 family) 
 MVMint64 MVM_address_from_native_family(MVMThreadContext *tc, sa_family_t family) {
     switch (family) {
         case PF_UNSPEC:
-            return MVM_SOCKET_FAMILY_UNSPEC;
+            return MVM_ADDRESS_FAMILY_UNSPEC;
         case PF_INET:
-            return MVM_SOCKET_FAMILY_INET;
+            return MVM_ADDRESS_FAMILY_INET;
         case PF_INET6:
-            return MVM_SOCKET_FAMILY_INET6;
+            return MVM_ADDRESS_FAMILY_INET6;
         case PF_UNIX:
-            return MVM_SOCKET_FAMILY_UNIX;
+            return MVM_ADDRESS_FAMILY_UNIX;
         default:
             MVM_exception_throw_adhoc(tc, "Unknown native network address family: %hhu", family);
     }
@@ -130,17 +130,17 @@ MVMint64 MVM_address_from_native_family(MVMThreadContext *tc, sa_family_t family
 
 int MVM_address_to_native_type(MVMThreadContext *tc, MVMint64 type) {
     switch (type) {
-        case MVM_SOCKET_TYPE_ANY:
+        case MVM_ADDRESS_TYPE_ANY:
             return 0;
-        case MVM_SOCKET_TYPE_STREAM:
+        case MVM_ADDRESS_TYPE_STREAM:
             return SOCK_STREAM;
-        case MVM_SOCKET_TYPE_DGRAM:
+        case MVM_ADDRESS_TYPE_DGRAM:
             return SOCK_DGRAM;
-        case MVM_SOCKET_TYPE_SEQPACKET:
+        case MVM_ADDRESS_TYPE_SEQPACKET:
             return SOCK_SEQPACKET;
-        case MVM_SOCKET_TYPE_RDM:
+        case MVM_ADDRESS_TYPE_RDM:
             return SOCK_RDM;
-        case MVM_SOCKET_TYPE_RAW:
+        case MVM_ADDRESS_TYPE_RAW:
             return SOCK_RAW;
         default:
             MVM_exception_throw_adhoc(tc, "Unknown network address type: %"PRIi64"", type);
@@ -150,17 +150,17 @@ int MVM_address_to_native_type(MVMThreadContext *tc, MVMint64 type) {
 MVMint64 MVM_address_from_native_type(MVMThreadContext *tc, int type) {
     switch (type) {
         case 0:
-            return MVM_SOCKET_TYPE_ANY;
+            return MVM_ADDRESS_TYPE_ANY;
         case SOCK_STREAM:
-            return MVM_SOCKET_TYPE_STREAM;
+            return MVM_ADDRESS_TYPE_STREAM;
         case SOCK_DGRAM:
-            return MVM_SOCKET_TYPE_DGRAM;
+            return MVM_ADDRESS_TYPE_DGRAM;
         case SOCK_SEQPACKET:
-            return MVM_SOCKET_TYPE_SEQPACKET;
+            return MVM_ADDRESS_TYPE_SEQPACKET;
         case SOCK_RDM:
-            return MVM_SOCKET_TYPE_RDM;
+            return MVM_ADDRESS_TYPE_RDM;
         case SOCK_RAW:
-            return MVM_SOCKET_TYPE_RAW;
+            return MVM_ADDRESS_TYPE_RAW;
         default:
             MVM_exception_throw_adhoc(tc, "Unknown native network address type: %d", type);
     }
@@ -168,11 +168,11 @@ MVMint64 MVM_address_from_native_type(MVMThreadContext *tc, int type) {
 
 int MVM_address_to_native_protocol(MVMThreadContext *tc, MVMint64 protocol) {
     switch (protocol) {
-        case MVM_SOCKET_PROTOCOL_ANY:
+        case MVM_ADDRESS_PROTOCOL_ANY:
             return 0;
-        case MVM_SOCKET_PROTOCOL_TCP:
+        case MVM_ADDRESS_PROTOCOL_TCP:
             return IPPROTO_TCP;
-        case MVM_SOCKET_PROTOCOL_UDP:
+        case MVM_ADDRESS_PROTOCOL_UDP:
             return IPPROTO_UDP;
         default:
             MVM_exception_throw_adhoc(tc, "Unknown network protocol: %"PRIi64"", protocol);
@@ -182,11 +182,11 @@ int MVM_address_to_native_protocol(MVMThreadContext *tc, MVMint64 protocol) {
 MVMint64 MVM_address_from_native_protocol(MVMThreadContext *tc, int protocol) {
     switch (protocol) {
         case 0:
-            return MVM_SOCKET_PROTOCOL_ANY;
+            return MVM_ADDRESS_PROTOCOL_ANY;
         case IPPROTO_TCP:
-            return MVM_SOCKET_PROTOCOL_TCP;
+            return MVM_ADDRESS_PROTOCOL_TCP;
         case IPPROTO_UDP:
-            return MVM_SOCKET_PROTOCOL_UDP;
+            return MVM_ADDRESS_PROTOCOL_UDP;
         default:
             MVM_exception_throw_adhoc(tc, "Unknown native network protocol: %d", protocol);
     }
