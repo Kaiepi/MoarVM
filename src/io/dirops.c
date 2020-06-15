@@ -186,20 +186,21 @@ static void gc_free(MVMThreadContext *tc, MVMObject *h, void *d) {
 
 /* Ops table for directory iterator; it all works off special ops, so no entries. */
 static const MVMIOOps op_table = {
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    gc_free
+    NULL, /* closable */
+    NULL, /* sync_readable */
+    NULL, /* sync_writable */
+    NULL, /* async_readable */
+    NULL, /* async_writable */
+    NULL, /* async_writable_to */
+    NULL, /* seekable */
+    NULL, /* sockety */
+    NULL, /* addressable */
+    NULL, /* get_async_task_handle */
+    NULL, /* lockable */
+    NULL, /* introspection */
+    NULL, /* set_buffer_size */
+    NULL, /* gc_mark */
+    gc_free,
 };
 
 /* Open a filehandle, returning a handle. */

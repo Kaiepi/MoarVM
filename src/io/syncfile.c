@@ -390,17 +390,18 @@ static const MVMIOOps op_table = {
     &closable,
     &sync_readable,
     &sync_writable,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* async_readable */
+    NULL, /* async_writable */
+    NULL, /* async_writable_to */
     &seekable,
-    NULL,
-    NULL,
+    NULL, /* sockety */
+    NULL, /* addressable */
+    NULL, /* get_async_task_handle */
     &lockable,
     &introspection,
     &set_buffer_size,
-    NULL,
-    gc_free
+    NULL, /* gc_mark */
+    gc_free,
 };
 
 /* Builds POSIX flag from mode string. */

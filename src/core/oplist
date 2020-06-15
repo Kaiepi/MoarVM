@@ -897,6 +897,8 @@ addrtonative        w(obj) r(obj) r(obj) :pure
 asyncdnsquery       w(obj) r(obj) r(str) r(int64) r(int64) r(obj) r(obj) r(obj)
 addrfromipv4native  w(obj) r(obj) r(int64) :pure
 addrfromipv6native  w(obj) r(obj) r(int64) r(int64) r(int64) :pure
+getsockname         w(obj) r(obj) :pure
+getpeername         w(obj) r(obj) :pure
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.

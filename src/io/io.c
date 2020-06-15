@@ -351,6 +351,21 @@ void MVM_io_bind(MVMThreadContext *tc, MVMObject *oshandle,
         MVM_exception_throw_adhoc(tc, "Cannot bind this kind of handle");
 }
 
+MVMObject * MVM_io_accept(MVMThreadContext *tc, MVMObject *oshandle) {
+    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "accept");
+    if (handle->body.ops->sockety) {
+        MVMObject *result;
+        MVMROOT(tc, handle, {
+            uv_mutex_t *mutex = acquire_mutex(tc, handle);
+            result = handle->body.ops->sockety->accept(tc, handle);
+            release_mutex(tc, mutex);
+        });
+        return result;
+    }
+    else
+        MVM_exception_throw_adhoc(tc, "Cannot accept this kind of handle");
+}
+
 MVMint64 MVM_io_getport(MVMThreadContext *tc, MVMObject *oshandle) {
     MVMOSHandle *handle = verify_is_handle(tc, oshandle, "getport");
     if (handle->body.ops->sockety) {
@@ -366,19 +381,34 @@ MVMint64 MVM_io_getport(MVMThreadContext *tc, MVMObject *oshandle) {
         MVM_exception_throw_adhoc(tc, "Cannot getport for this kind of handle");
 }
 
-MVMObject * MVM_io_accept(MVMThreadContext *tc, MVMObject *oshandle) {
-    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "accept");
-    if (handle->body.ops->sockety) {
+MVMObject * MVM_io_get_source_address(MVMThreadContext *tc, MVMObject *oshandle) {
+    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "get source address");
+    if (handle->body.ops->addressable) {
         MVMObject *result;
         MVMROOT(tc, handle, {
             uv_mutex_t *mutex = acquire_mutex(tc, handle);
-            result = handle->body.ops->sockety->accept(tc, handle);
+            result = handle->body.ops->addressable->getsockname(tc, handle);
             release_mutex(tc, mutex);
         });
         return result;
     }
     else
-        MVM_exception_throw_adhoc(tc, "Cannot accept this kind of handle");
+        MVM_exception_throw_adhoc(tc, "Cannot get the source address for this type of handle");
+}
+
+MVMObject * MVM_io_get_peer_address(MVMThreadContext *tc, MVMObject *oshandle) {
+    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "get peer address");
+    if (handle->body.ops->addressable) {
+        MVMObject *result;
+        MVMROOT(tc, handle, {
+            uv_mutex_t *mutex = acquire_mutex(tc, handle);
+            result = handle->body.ops->addressable->getpeername(tc, handle);
+            release_mutex(tc, mutex);
+        });
+        return result;
+    }
+    else
+        MVM_exception_throw_adhoc(tc, "Cannot get the peer address for this type of handle");
 }
 
 void MVM_io_set_buffer_size(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 size) {

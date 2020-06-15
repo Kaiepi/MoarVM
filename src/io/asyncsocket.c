@@ -438,6 +438,32 @@ static MVMint64 close_socket(MVMThreadContext *tc, MVMOSHandle *h) {
     return 0;
 }
 
+static MVMObject * socket_getsockname(MVMThreadContext *tc, MVMOSHandle *h) {
+    MVMIOAsyncSocketData *data;
+    MVMAddress           *address;
+    int                   address_len;
+    int                   error;
+
+    data    = (MVMIOAsyncSocketData *)h->body.data;
+    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    if ((error = uv_tcp_getsockname((uv_tcp_t *)data->handle, (struct sockaddr *)&address->body.storage, &address_len)))
+        MVM_exception_throw_adhoc(tc, "Failed to get source address: %s", uv_strerror(error));
+    return (MVMObject *)address;
+}
+
+static MVMObject * socket_getpeername(MVMThreadContext *tc, MVMOSHandle *h) {
+    MVMIOAsyncSocketData *data;
+    MVMAddress           *address;
+    int                   address_len;
+    int                   error;
+
+    data    = (MVMIOAsyncSocketData *)h->body.data;
+    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    if ((error = uv_tcp_getpeername((uv_tcp_t *)data->handle, (struct sockaddr *)&address->body.storage, &address_len)))
+        MVM_exception_throw_adhoc(tc, "Failed to get peer address: %s", uv_strerror(error));
+    return (MVMObject *)address;
+}
+
 static MVMint64 socket_is_tty(MVMThreadContext *tc, MVMOSHandle *h) {
     MVMIOAsyncSocketData *data   = (MVMIOAsyncSocketData *)h->body.data;
     uv_handle_t          *handle = (uv_handle_t *)data->handle;
@@ -459,23 +485,26 @@ static MVMint64 socket_handle(MVMThreadContext *tc, MVMOSHandle *h) {
 static const MVMIOClosable      closable       = { close_socket };
 static const MVMIOAsyncReadable async_readable = { read_bytes };
 static const MVMIOAsyncWritable async_writable = { write_bytes };
+static const MVMIOAddressable   addressable    = { socket_getsockname,
+                                                   socket_getpeername };
 static const MVMIOIntrospection introspection  = { socket_is_tty,
                                                    socket_handle };
 static const MVMIOOps op_table = {
     &closable,
-    NULL,
-    NULL,
+    NULL, /* sync_readable */
+    NULL, /* sync_writable */
     &async_readable,
     &async_writable,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* async_writable_to */
+    NULL, /* seekable */
+    NULL, /* sockety */
+    &addressable,
+    NULL, /* get_async_task_handle */
+    NULL, /* lockable */
     &introspection,
-    NULL,
-    NULL,
-    NULL
+    NULL, /* set_buffer_size */
+    NULL, /* gc_mark */
+    NULL, /* gc_free */
 };
 
 static void push_name_and_port(MVMThreadContext *tc, struct sockaddr_storage *name, MVMObject *arr) {

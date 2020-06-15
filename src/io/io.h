@@ -10,6 +10,7 @@ struct MVMIOOps {
     const MVMIOAsyncWritableTo *async_writable_to;
     const MVMIOSeekable        *seekable;
     const MVMIOSockety         *sockety;
+    const MVMIOAddressable     *addressable;
     MVMObject * (*get_async_task_handle) (MVMThreadContext *tc, MVMOSHandle *h);
     const MVMIOLockable        *lockable;
     const MVMIOIntrospection   *introspection;
@@ -81,6 +82,12 @@ struct MVMIOSockety {
     MVMint64 (*getport) (MVMThreadContext *tc, MVMOSHandle *h);
 };
 
+/* I/O operations on handles that can have addresses associated with them. */
+struct MVMIOAddressable {
+    MVMObject * (*getsockname) (MVMThreadContext *tc, MVMOSHandle *h);
+    MVMObject * (*getpeername) (MVMThreadContext *tc, MVMOSHandle *h);
+};
+
 /* I/O operations on handles that can lock/unlock. */
 struct MVMIOLockable {
     MVMint64 (*lock) (MVMThreadContext *tc, MVMOSHandle *h, MVMint64 flag);
@@ -123,6 +130,8 @@ void MVM_io_bind(MVMThreadContext *tc, MVMObject *oshandle,
         MVMint64 family, MVMint64 type, MVMint64 protocol,
         MVMObject *maybe_address,
         MVMint32 backlog);
+MVMObject * MVM_io_get_source_address(MVMThreadContext *tc, MVMObject *oshandle);
+MVMObject * MVM_io_get_peer_address(MVMThreadContext *tc, MVMObject *oshandle);
 MVMObject * MVM_io_accept(MVMThreadContext *tc, MVMObject *oshandle);
 MVMint64 MVM_io_getport(MVMThreadContext *tc, MVMObject *oshandle);
 void MVM_io_set_buffer_size(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 size);

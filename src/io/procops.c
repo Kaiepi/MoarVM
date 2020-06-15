@@ -445,19 +445,20 @@ static const MVMIOAsyncWritable proc_async_writable = { write_bytes };
 static const MVMIOClosable      closable            = { close_stdin };
 static const MVMIOOps proc_op_table = {
     &closable,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* sync_readable */
+    NULL, /* sync_writable */
+    NULL, /* async_readable */
     &proc_async_writable,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* async_writable_to */
+    NULL, /* seekable */
+    NULL, /* sockety */
+    NULL, /* addressable */
     get_async_task_handle,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* lockable */
+    NULL, /* introspection */
+    NULL, /* set_buffer_size */
     proc_async_gc_mark,
-    NULL
+    NULL, /* gc_free */
 };
 
 static void spawn_async_close(uv_handle_t *handle) {

@@ -320,7 +320,9 @@ static void socket_bind(MVMThreadContext *tc, MVMOSHandle *h,
     }
 }
 
-MVMint64 socket_getport(MVMThreadContext *tc, MVMOSHandle *h) {
+static MVMObject * socket_accept(MVMThreadContext *tc, MVMOSHandle *h);
+
+static MVMint64 socket_getport(MVMThreadContext *tc, MVMOSHandle *h) {
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
 
     struct sockaddr_storage name;
@@ -345,6 +347,34 @@ MVMint64 socket_getport(MVMThreadContext *tc, MVMOSHandle *h) {
     return port;
 }
 
+static MVMObject * socket_getsockname(MVMThreadContext *tc, MVMOSHandle *h) {
+    MVMIOSyncSocketData *data;
+    MVMAddress          *address;
+    socklen_t            address_len;
+    int                  error;
+
+    data    = (MVMIOSyncSocketData *)h->body.data;
+    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    error   = getsockname(data->handle, (struct sockaddr *)&address->body.storage, &address_len);
+    if (error != 0)
+        MVM_exception_throw_adhoc(tc, "Failed to get source address: %s", strerror(errno));
+    return (MVMObject *)address;
+}
+
+static MVMObject * socket_getpeername(MVMThreadContext *tc, MVMOSHandle *h) {
+    MVMIOSyncSocketData *data;
+    MVMAddress          *address;
+    socklen_t            address_len;
+    int                  error;
+
+    data    = (MVMIOSyncSocketData *)h->body.data;
+    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    error   = getpeername(data->handle, (struct sockaddr *)&address->body.storage, &address_len);
+    if (error != 0)
+        MVM_exception_throw_adhoc(tc, "Failed to get peer address: %s", strerror(errno));
+    return (MVMObject *)address;
+}
+
 static MVMint64 socket_is_tty(MVMThreadContext *tc, MVMOSHandle *h) {
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
     return (MVMint64)isatty(data->handle);
@@ -355,8 +385,6 @@ static MVMint64 socket_handle(MVMThreadContext *tc, MVMOSHandle *h) {
     return (MVMint64)data->handle;
 }
 
-static MVMObject * socket_accept(MVMThreadContext *tc, MVMOSHandle *h);
-
 /* IO ops table, populated with functions. */
 static const MVMIOClosable      closable      = { close_socket };
 static const MVMIOSyncReadable  sync_readable = { socket_read_bytes,
@@ -364,10 +392,12 @@ static const MVMIOSyncReadable  sync_readable = { socket_read_bytes,
 static const MVMIOSyncWritable  sync_writable = { socket_write_bytes,
                                                   socket_flush,
                                                   socket_truncate };
-static const MVMIOSockety             sockety = { socket_connect,
+static const MVMIOSockety       sockety       = { socket_connect,
                                                   socket_bind,
                                                   socket_accept,
                                                   socket_getport };
+static const MVMIOAddressable   addressable   = { socket_getsockname,
+                                                  socket_getpeername };
 static const MVMIOIntrospection introspection = { socket_is_tty,
                                                   socket_handle };
 
@@ -375,17 +405,18 @@ static const MVMIOOps op_table = {
     &closable,
     &sync_readable,
     &sync_writable,
-    NULL,
-    NULL,
-    NULL,
-    NULL,
+    NULL, /* async_readable */
+    NULL, /* async_writable */
+    NULL, /* async_writable_to */
+    NULL, /* seekable */
     &sockety,
-    NULL,
-    NULL,
+    &addressable,
+    NULL, /* get_async_task_handle */
+    NULL, /* lockable */
     &introspection,
-    NULL,
-    NULL,
-    gc_free
+    NULL, /* set_buffer_size */
+    NULL, /* gc_mark */
+    gc_free,
 };
 
 static MVMObject * socket_accept(MVMThreadContext *tc, MVMOSHandle *h) {

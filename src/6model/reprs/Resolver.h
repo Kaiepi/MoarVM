@@ -1,4 +1,4 @@
-#define MVM_RESOLVER_POOL_SIZE 8
+#define MVM_RESOLVER_POOL_SIZE 16
 
 /* Info pertaining to a pending DNS query. */
 struct MVMResolverQueryInfo;
