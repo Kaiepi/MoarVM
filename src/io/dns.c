@@ -151,15 +151,19 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
 
             arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
             MVM_repr_push_o(tc, arr, task->body.schedulee);
-            MVMROOT(tc, arr, {
-                msg_string = MVM_string_ascii_decode_nt(tc,
-                    tc->instance->VMString, ares_strerror(status));
-                MVMROOT(tc, msg_string, {
-                    MVMObject *msg_box = MVM_repr_box_str(tc,
-                        tc->instance->boot_types.BOOTStr, msg_string);
-                    MVM_repr_push_o(tc, arr, msg_box);
+            if (status == ARES_ENODATA)
+                MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+            else {
+                MVMROOT(tc, arr, {
+                    msg_string = MVM_string_ascii_decode_nt(tc,
+                        tc->instance->VMString, ares_strerror(status));
+                    MVMROOT(tc, msg_string, {
+                        MVMObject *msg_box = MVM_repr_box_str(tc,
+                            tc->instance->boot_types.BOOTStr, msg_string);
+                        MVM_repr_push_o(tc, arr, msg_box);
+                    });
                 });
-            });
+            }
             switch (qi->type) {
                 case MVM_DNS_RECORD_TYPE_A:
                 case MVM_DNS_RECORD_TYPE_AAAA:
