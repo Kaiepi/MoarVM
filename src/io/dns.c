@@ -53,32 +53,35 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
                 native_address_info != NULL;
                 native_address_info = native_address_info->ai_next
             ) {
-                MVMObject  *address_info   = NULL;
-                MVMAddress *address        = NULL;
-                MVMObject  *boxed_family   = NULL;
-                MVMObject  *boxed_type     = NULL;
-                MVMObject  *boxed_protocol = NULL;
-                MVMROOT5(tc, address_info, address, boxed_family, boxed_type, boxed_protocol, {
-                    address_info = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-                    address      = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-                    memcpy(&address->body.storage, native_address_info->ai_addr, native_address_info->ai_addrlen);
+                int protocol = native_address_info->ai_protocol;
+                if (protocol == IPPROTO_TCP || protocol == IPPROTO_UDP || protocol == IPPROTO_RAW) {
+                    MVMObject  *address_info   = NULL;
+                    MVMAddress *address        = NULL;
+                    MVMObject  *boxed_family   = NULL;
+                    MVMObject  *boxed_type     = NULL;
+                    MVMObject  *boxed_protocol = NULL;
+                    MVMROOT5(tc, address_info, address, boxed_family, boxed_type, boxed_protocol, {
+                        address_info = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+                        address      = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+                        memcpy(&address->body.storage, native_address_info->ai_addr, native_address_info->ai_addrlen);
 
-                    boxed_family   = MVM_repr_box_int(tc,
-                        tc->instance->boot_types.BOOTInt,
-                        MVM_address_from_native_family(tc, native_address_info->ai_family));
-                    boxed_type     = MVM_repr_box_int(tc,
-                        tc->instance->boot_types.BOOTInt,
-                        MVM_address_from_native_type(tc, native_address_info->ai_socktype));
-                    boxed_protocol = MVM_repr_box_int(tc,
-                        tc->instance->boot_types.BOOTInt,
-                        MVM_address_from_native_protocol(tc, native_address_info->ai_protocol));
+                        boxed_family   = MVM_repr_box_int(tc,
+                            tc->instance->boot_types.BOOTInt,
+                            MVM_address_from_native_family(tc, native_address_info->ai_family));
+                        boxed_type     = MVM_repr_box_int(tc,
+                            tc->instance->boot_types.BOOTInt,
+                            MVM_address_from_native_type(tc, native_address_info->ai_socktype));
+                        boxed_protocol = MVM_repr_box_int(tc,
+                            tc->instance->boot_types.BOOTInt,
+                            MVM_address_from_native_protocol(tc, native_address_info->ai_protocol));
 
-                    MVM_repr_push_o(tc, address_info, (MVMObject *)address);
-                    MVM_repr_push_o(tc, address_info, boxed_family);
-                    MVM_repr_push_o(tc, address_info, boxed_type);
-                    MVM_repr_push_o(tc, address_info, boxed_protocol);
-                    MVM_repr_push_o(tc, arr, address_info);
-                });
+                        MVM_repr_push_o(tc, address_info, (MVMObject *)address);
+                        MVM_repr_push_o(tc, address_info, boxed_family);
+                        MVM_repr_push_o(tc, address_info, boxed_type);
+                        MVM_repr_push_o(tc, address_info, boxed_protocol);
+                        MVM_repr_push_o(tc, arr, address_info);
+                    });
+                }
             }
         });
     });
