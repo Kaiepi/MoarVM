@@ -169,7 +169,7 @@ static void read_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
 /* Operations table for async read task. */
 static const MVMAsyncTaskOps read_op_table = {
     read_setup,
-    NULL,
+    NULL, /* permit */
     read_cancel,
     read_gc_mark,
     read_gc_free
@@ -339,10 +339,10 @@ static void write_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
 /* Operations table for async write task. */
 static const MVMAsyncTaskOps write_op_table = {
     write_setup,
-    NULL,
-    NULL,
+    NULL, /* permit */
+    NULL, /* cancel */
     write_gc_mark,
-    write_gc_free
+    write_gc_free,
 };
 
 static MVMAsyncTask * write_bytes(MVMThreadContext *tc,
@@ -415,10 +415,10 @@ static void close_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
 /* Operations table for async close task. */
 static const MVMAsyncTaskOps close_op_table = {
     close_perform,
-    NULL,
-    NULL,
+    NULL, /* permit */
+    NULL, /* cancel */
     close_gc_mark,
-    close_gc_free
+    close_gc_free,
 };
 
 static MVMint64 close_socket(MVMThreadContext *tc, MVMOSHandle *h) {
@@ -642,6 +642,11 @@ static void connect_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *asyn
     }
 }
 
+static void connect_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
+    ConnectInfo *ci = (ConnectInfo *)data;
+    MVM_gc_worklist_add(tc, worklist, &ci->address);
+}
+
 /* Frees info for a connection task. */
 static void connect_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
     if (data)
@@ -651,10 +656,10 @@ static void connect_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
 /* Operations table for async connect task. */
 static const MVMAsyncTaskOps connect_op_table = {
     connect_setup,
-    NULL,
-    NULL,
-    NULL,
-    connect_gc_free
+    NULL, /* permit */
+    NULL, /* cancel */
+    connect_gc_mark,
+    connect_gc_free,
 };
 
 /* Sets off an asynchronous socket connection. */
@@ -678,17 +683,17 @@ MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc,
     /* Create async task handle. */
     MVMROOT4(tc, queue, schedulee, async_type, address, {
         task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
-        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
-        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
-        task->body.ops  = &connect_op_table;
-        ci              = MVM_calloc(1, sizeof(ConnectInfo));
-        MVM_ASSIGN_REF(tc, &(task->common.header), ci->address, address);
-        task->body.data = ci;
+    });
+    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
+    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
+    task->body.ops  = &connect_op_table;
+    ci              = MVM_calloc(1, sizeof(ConnectInfo));
+    MVM_ASSIGN_REF(tc, &(task->common.header), ci->address, address);
+    task->body.data = ci;
 
-        /* Hand the task off to the event loop. */
-        MVMROOT(tc, task, {
-            MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
-        });
+    /* Hand the task off to the event loop. */
+    MVMROOT(tc, task, {
+        MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
     });
 
     return (MVMObject *)task;
@@ -857,6 +862,11 @@ static void listen_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *asyn
     }
 }
 
+static void listen_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
+    ListenInfo *li = (ListenInfo *)data;
+    MVM_gc_worklist_add(tc, worklist, &li->address);
+}
+
 /* Frees info for a listen task. */
 static void listen_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
     if (data)
@@ -866,10 +876,10 @@ static void listen_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
 /* Operations table for async listen task. */
 static const MVMAsyncTaskOps listen_op_table = {
     listen_setup,
-    NULL,
+    NULL, /* permit */
     listen_cancel,
-    NULL,
-    listen_gc_free
+    listen_gc_mark,
+    listen_gc_free,
 };
 
 /* Initiates an async socket listener. */
@@ -893,18 +903,18 @@ MVMObject * MVM_io_socket_listen_async(MVMThreadContext *tc,
     /* Create async task handle. */
     MVMROOT4(tc, queue, schedulee, address, async_type, {
         task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
-        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
-        MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
-        task->body.ops  = &listen_op_table;
-        li              = MVM_calloc(1, sizeof(ListenInfo));
-        MVM_ASSIGN_REF(tc, &(task->common.header), li->address, address);
-        li->backlog     = backlog;
-        task->body.data = li;
+    });
+    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
+    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
+    task->body.ops  = &listen_op_table;
+    li              = MVM_calloc(1, sizeof(ListenInfo));
+    MVM_ASSIGN_REF(tc, &(task->common.header), li->address, address);
+    li->backlog     = backlog;
+    task->body.data = li;
 
-        /* Hand the task off to the event loop. */
-        MVMROOT(tc, task, {
-            MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
-        });
+    /* Hand the task off to the event loop. */
+    MVMROOT(tc, task, {
+        MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
     });
 
     return (MVMObject *)task;
