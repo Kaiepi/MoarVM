@@ -2477,6 +2477,63 @@
         $disp)
       (^vmnull))))
 
+(template: getaddrinfo
+  (call (^func &MVM_io_dns_resolve)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)
+      (carg $2   int)
+      (carg $3   int)
+      (carg $4   int)
+      (carg $5   int)
+      (carg $6   int)) ptr_sz))
+
+(template: addrfromipv4pres
+  (call (^func &MVM_address_from_ipv4_presentation)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)
+      (carg $2   int)) ptr_sz))
+
+(template: addrfromipv6pres
+  (call (^func &MVM_address_from_ipv4_presentation)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)
+      (carg $2   int)
+      (carg $3   int)
+      (carg $4   int)) ptr_sz))
+
+(template: addrfrompath
+  (call (^func &MVM_address_from_path)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)) ptr_sz))
+
+(template: asyncdnsquery
+  (call (^func &MVM_io_dns_query_async)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)
+      (carg $2   ptr)
+      (carg $3   int)
+      (carg $4   int)
+      (carg $4   ptr)
+      (carg $5   ptr)
+      (carg $6   ptr)) ptr_sz))
+
+(template: getsockname
+  (call (^func &MVM_io_get_source_address)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)) ptr_sz))
+
+(template: getpeername
+  (call (^func &MVM_io_get_peer_address)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)) ptr_sz))
+
 (template: strfromname
   (call (^func &MVM_unicode_string_from_name)
     (arglist

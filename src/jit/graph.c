@@ -1929,6 +1929,14 @@ start:
         /* Parameters */
     case MVM_OP_param_sp:
     case MVM_OP_param_sn:
+        /* Addresses */
+    case MVM_OP_addrtopres:
+    case MVM_OP_addrport:
+    case MVM_OP_addrflowinfo:
+    case MVM_OP_addrscopeid:
+    case MVM_OP_addrtonative:
+    case MVM_OP_addrfromipv4native:
+    case MVM_OP_addrfromipv6native:
         /* Specialized atomics */
     case MVM_OP_sp_cas_o:
     case MVM_OP_sp_atomicload_o:

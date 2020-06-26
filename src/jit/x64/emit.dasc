@@ -2459,6 +2459,114 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         | mov WORK[target], TMP1;
         break;
     }
+    case MVM_OP_addrtopres:
+    case MVM_OP_addrport:
+    case MVM_OP_addrflowinfo:
+    case MVM_OP_addrscopeid: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 address = ins->operands[1].reg.orig;
+        | mov ARG2, aword WORK[address];
+        | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_MVMAddress;
+        | jne >1;
+        | test_type_object ARG2;
+        | jz >2;
+        |1:
+        if (ins->info->opcode == MVM_OP_addrtopres) {
+            | throw_adhoc "addrtopres requires a concrete MVMAddress";
+        } else if (ins->info->opcode == MVM_OP_addrport) {
+            | throw_adhoc "addrport requires a concrete MVMAddress";
+        } else if (ins->info->opcode == MVM_OP_addrflowinfo) {
+            | throw_adhoc "addrflowinfo requires a concrete MVMAddress";
+        } else {
+            | throw_adhoc "addrscopeid requires a concrete MVMAddress";
+        }
+        |2:
+        | mov ARG1, TC;
+        if (ins->info->opcode == MVM_OP_addrtopres) {
+            | callp &MVM_address_to_presentation;
+            | mov aword WORK[result], RV;
+        } else if (ins->info->opcode == MVM_OP_addrport) {
+            | callp &MVM_address_port;
+            | mov WORK[result], RV;
+        } else if (ins->info->opcode == MVM_OP_addrflowinfo) {
+            | callp &MVM_address_flowinfo;
+            | mov WORK[result], RV;
+        } else {
+            | callp &MVM_address_scope_id;
+            | mov WORK[result], RV;
+        }
+        break;
+    }
+    case MVM_OP_addrtonative: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 address = ins->operands[1].reg.orig;
+        MVMint16 buf = ins->operands[2].reg.orig;
+        | mov ARG2, aword WORK[address];
+        | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_MVMAddress;
+        | jne >1;
+        | test_type_object ARG2;
+        | jz >2;
+        |1:
+        | throw_adhoc "addrtonative requires a concrete MVMAddress";
+        |2:
+        | mov ARG3, aword WORK[buf];
+        | cmp_repr_id ARG3, TMP1, MVM_REPR_ID_VMArray;
+        | je >3;
+        | throw_adhoc "addrtonative requires a VMArray";
+        |3:
+        | mov ARG1, TC;
+        | callp &MVM_address_to_native_address;
+        | mov aword WORK[result], RV;
+        break;
+    }
+    case MVM_OP_addrfromipv4native: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 buf = ins->operands[1].reg.orig;
+        MVMint16 port = ins->operands[2].reg.orig;
+        | mov ARG2, aword WORK[buf];
+        | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_VMArray;
+        | jne >1;
+        | test_type_object ARG2;
+        | jz >2;
+        |1:
+        if (ins->info->opcode == MVM_OP_addrfromipv4native) {
+            | throw_adhoc "addrfromipv4native requires a concrete VMArray";
+        } else {
+            | throw_adhoc "addrfromipv6native requires a concrete VMArray";
+        }
+        |2:
+        | mov ARG1, TC;
+        | mov TMP2w, word WORK[port];
+        | mov ARG3, TMP2;
+        | callp &MVM_address_from_ipv4_native;
+        | mov aword WORK[result], RV;
+        break;
+    }
+    case MVM_OP_addrfromipv6native: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 buf = ins->operands[1].reg.orig;
+        MVMint16 port = ins->operands[2].reg.orig;
+        MVMint16 flowinfo = ins->operands[3].reg.orig;
+        MVMint16 scope_id = ins->operands[4].reg.orig;
+        | mov ARG2, aword buf;
+        | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_VMArray;
+        | jne >1;
+        | test_type_object ARG2;
+        | jz >2;
+        |1:
+        | throw_adhoc "addrfromipv6native requires a concrete VMArray";
+        |2:
+        | mov ARG1, TC;
+        | mov TMP2w, word WORK[port];
+        | mov ARG3, TMP2;
+        | mov TMP3d, dword WORK[flowinfo];
+        | mov ARG4, TMP3;
+        | mov TMP4d, dword WORK[scope_id];
+        | mov ARG5, TMP4;
+        | callp &MVM_address_from_ipv6_native;
+        | mov aword WORK[result], RV;
+        break;
+    }
     case MVM_OP_sp_fastbox_i:
     case MVM_OP_sp_fastbox_i_ic:
     case MVM_OP_sp_fastbox_bi:
