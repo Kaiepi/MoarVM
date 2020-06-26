@@ -1,8 +1,8 @@
 #define MVM_RESOLVER_POOL_SIZE 16
 
-/* Info pertaining to a pending DNS query. */
-struct MVMResolverQueryInfo;
-
+/* A DNS resolution context. This keeps track of state that needs to persist
+   between DNS queries. The body of a Resolver keeps a pool of these, since
+   c-ares' channels misbehave when being used over multiple threads. */
 struct MVMResolverContext {
     ares_channel  channel;
     int           configured;
