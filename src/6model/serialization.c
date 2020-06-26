@@ -721,15 +721,13 @@ static void write_address(MVMThreadContext *tc, MVMSerializationWriter *writer, 
             MVM_serialization_write_int(tc, writer, socket_address->sin6_scope_id);
             break;
         }
+#if !defined(_WIN32) && defined(AF_UNIX)
         case AF_UNIX: {
-#if defined(AF_UNIX)
             struct sockaddr_un *socket_address = (struct sockaddr_un *)&body->storage;
             MVM_serialization_write_cstr(tc, writer, socket_address->sun_path);
-#else
-            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
-#endif
             break;
         }
+#endif
         default:
             MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", body->storage.ss_family);
             break;
@@ -1964,7 +1962,7 @@ static MVMObject * read_address(MVMThreadContext *tc, MVMSerializationReader *re
             size_t             socket_address_size = sizeof(socket_address);
 
             memset(&socket_address, 0, socket_address_size);
-            socket_address.sin_len         = socket_address_size;
+            MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, socket_address_size);
             socket_address.sin_family      = family;
             socket_address.sin_addr.s_addr = (in_addr_t)MVM_serialization_read_int(tc, reader);
             socket_address.sin_port        = (in_port_t)MVM_serialization_read_int(tc, reader);
@@ -1977,7 +1975,7 @@ static MVMObject * read_address(MVMThreadContext *tc, MVMSerializationReader *re
             size_t              i;
 
             memset(&socket_address, 0, socket_address_size);
-            socket_address.sin6_len    = socket_address_size;
+            MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, socket_address_size);
             socket_address.sin6_family = family;
             for (i = 0; i < 4; ++i) {
                 size_t    j;
@@ -1991,8 +1989,8 @@ static MVMObject * read_address(MVMThreadContext *tc, MVMSerializationReader *re
             memcpy(&body->storage, &socket_address, socket_address_size);
             break;
         }
+#if !defined(_WIN32) && defined(AF_UNIX)
         case AF_UNIX: {
-#if defined(AF_UNIX)
             struct sockaddr_un  socket_address;
             size_t              socket_address_size = sizeof(socket_address);
             char               *path                = MVM_serialization_read_cstr(tc, reader);
@@ -2004,11 +2002,9 @@ static MVMObject * read_address(MVMThreadContext *tc, MVMSerializationReader *re
             memcpy(socket_address.sun_path, path, path_len);
             memcpy(&body->storage, &socket_address, socket_address_size);
             MVM_free(path);
-#else
-            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
-#endif
             break;
         }
+#endif
         default:
             MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", family);
             break;

@@ -1,11 +1,11 @@
 #include "moar.h"
 
 #ifdef _WIN32
-    #include <winsock2.h>
     #include <io.h>
+    #include <winsock2.h>
 
     typedef SOCKET Socket;
-    #define isatty _isatty
+    #define isatty _isatty;
 #else
     #include "unistd.h"
     #include <sys/socket.h>
@@ -247,7 +247,7 @@ static void socket_connect(MVMThreadContext *tc, MVMOSHandle *h,
     interval_id = MVM_telemetry_interval_start(tc, "syncsocket connect");
     if (!data->handle) {
         struct sockaddr *dest      = (struct sockaddr *)&address->body.storage;
-        socklen_t        dest_size = address->body.storage.ss_len;
+        socklen_t        dest_size = MVM_address_get_storage_length(tc, dest);
         int              r;
 
         Socket s = socket(MVM_address_to_native_family(tc, family),
@@ -283,7 +283,7 @@ static void socket_bind(MVMThreadContext *tc, MVMOSHandle *h,
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
     if (!data->handle) {
         struct sockaddr *dest      = (struct sockaddr *)&address->body.storage;
-        socklen_t        dest_size = address->body.storage.ss_len;
+        socklen_t        dest_size = MVM_address_get_storage_length(tc, dest);
         int              r;
 
         Socket s = socket(MVM_address_to_native_family(tc, family),

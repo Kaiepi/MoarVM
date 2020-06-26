@@ -175,7 +175,7 @@ if ($^O eq 'darwin') {
     unless ($gnu_toolchain) {
         # When XCode toolchain is used then force use of XCode's make if
         # available.
-        $config{make} = '/usr/bin/make' if -x '/usr/bin/make'; 
+        $config{make} = '/usr/bin/make' if -x '/usr/bin/make';
     }
 
     # Here are the tools that seem to cause trouble.
@@ -378,6 +378,8 @@ else {
 $config{moar_cincludes} .= ' ' . $defaults{ccinc} . '3rdparty/c-ares';
 $config{install}        .= "\t\$(MKPATH) \"\$(DESTDIR)\$(PREFIX)/include/c-ares\"\n"
                          . "\t\$(CP) 3rdparty/c-ares/*.h \"\$(DESTDIR)\$(PREFIX)/include/c-ares\"\n";
+# XXX: Probably belongs more in build/setup.pm.
+push @{$config{defs}}, 'CARES_STATICLIB' if $^O eq 'MSWin32' && $config{make} eq 'nmake';
 
 # mangle library names
 $config{ldlibs} = join ' ',
@@ -388,7 +390,6 @@ $config{ldlibs} = ' -lasan ' . $config{ldlibs} if $args{asan} && $^O ne 'darwin'
 $config{ldlibs} = ' -lubsan ' . $config{ldlibs} if $args{ubsan} and $^O ne 'darwin';
 $config{ldlibs} = ' -ltsan ' . $config{ldlibs} if $args{tsan} and $^O ne 'darwin';
 $config{ldlibs} = $config{ldlibs} . ' -lzstd' if $config{heapsnapformat} == 3;
-$config{ldlibs} = $config{ldlibs} . ' -lcares';
 # macro defs
 $config{ccdefflags} = join ' ', map { $config{ccdef} . $_ } @{$config{defs}};
 

@@ -275,9 +275,10 @@ TERM
         dl  => { %TP_DL, name => 'libdynload_s' },
 
         ares => {
-            %TP_ARES,
-            rule  => 'cd 3rdparty/c-ares && buildconf.bat --disable-shared --enable-nonblocking && $(MAKE) libcares.la && cp .libs/libcares.a .',
-            clean => 'cd 3rdparty/c-ares && $(MAKE) distclean && $(RM) libcares.a',
+            name  => 'libcares',
+            path  => '3rdparty/c-ares/msvc/cares/lib-release',
+            rule  => 'cd 3rdparty/c-ares && buildconf.bat && $(MAKE) /f Makefile.msvc c-ares CFG=lib-release RTLIBCFG=static',
+            clean => 'cd 3rdparty/c-ares && $(MAKE) /f Makefile.msvc clean CFG=lib-release',
         },
     },
 );

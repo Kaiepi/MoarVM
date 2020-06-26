@@ -14,7 +14,6 @@
     #include <winsock2.h>
     #include <ws2tcpip.h>
     typedef SOCKET Socket;
-    #define sa_family_t unsigned int
 #else
     #include "unistd.h"
     #include <sys/socket.h>

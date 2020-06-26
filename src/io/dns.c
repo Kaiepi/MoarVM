@@ -2,8 +2,6 @@
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
-
-#define sa_family_t unsigned int
 #endif
 
 #if defined(_MSC_VER)
@@ -214,13 +212,14 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
                                 struct in_addr     *native_address = (struct in_addr *)host->h_addr_list[i];
                                 struct sockaddr_in  socket_address;
                                 memset(&socket_address, 0, sizeof(socket_address));
-                                socket_address.sin_len    = sizeof(socket_address);
+                                MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
                                 socket_address.sin_family = AF_INET;
                                 memcpy(&socket_address.sin_addr, native_address, sizeof(struct in_addr));
                                 MVMROOT(tc, addresses, {
                                     MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
                                         tc->instance->boot_types.BOOTAddress);
-                                    memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
+                                    memcpy(&address->body.storage, &socket_address,
+                                        MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
                                     MVM_repr_push_o(tc, addresses, (MVMObject *)address);
                                 });
                             }
@@ -267,13 +266,14 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
                                 struct in6_addr     *native_address = (struct in6_addr *)host->h_addr_list[i];
                                 struct sockaddr_in6  socket_address;
                                 memset(&socket_address, 0, sizeof(socket_address));
-                                socket_address.sin6_len    = sizeof(socket_address);
+                                MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
                                 socket_address.sin6_family = AF_INET6;
                                 memcpy(&socket_address.sin6_addr, native_address, sizeof(struct in6_addr));
                                 MVMROOT(tc, addresses, {
                                     MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
                                         tc->instance->boot_types.BOOTAddress);
-                                    memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
+                                    memcpy(&address->body.storage, &socket_address,
+                                        MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
                                     MVM_repr_push_o(tc, addresses, (MVMObject *)address);
                                 });
                             }

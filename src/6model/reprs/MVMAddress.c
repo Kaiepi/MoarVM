@@ -2,8 +2,6 @@
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
-
-#define sa_family_t unsigned int
 #else
 #include <sys/un.h>
 
@@ -239,14 +237,15 @@ MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc,
     else {
         struct sockaddr_in socket_address;
         memset(&socket_address, 0, sizeof(socket_address));
-        socket_address.sin_len    = sizeof(socket_address);
+        MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
         socket_address.sin_family = AF_INET;
         socket_address.sin_port   = htons(port);
         memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
 
         MVMROOT(tc, presentation, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-            memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
+            memcpy(&address->body.storage, &socket_address,
+                MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
         });
     }
 
@@ -259,6 +258,7 @@ MVMObject * MVM_address_from_ipv4_native(MVMThreadContext *tc, MVMArray *native_
     else {
         struct in_addr      native_address;
         struct sockaddr_in  socket_address;
+        socklen_t           socket_address_len;
         MVMAddress         *address;
         size_t              i;
 
@@ -268,14 +268,15 @@ MVMObject * MVM_address_from_ipv4_native(MVMThreadContext *tc, MVMArray *native_
                                   | (MVMuint8)MVM_repr_at_pos_i(tc, (MVMObject *)native_address_buf, i);
 
         memset(&socket_address, 0, sizeof(socket_address));
-        socket_address.sin_len    = sizeof(socket_address);
+        MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
         socket_address.sin_family = AF_INET;
         socket_address.sin_port   = htons(port);
         memcpy(&socket_address.sin_addr, &native_address, sizeof(native_address));
 
         MVMROOT(tc, native_address_buf, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-            memcpy(&address->body.storage, &socket_address, socket_address.sin_len);
+            memcpy(&address->body.storage, &socket_address,
+                MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
         });
         return (MVMObject *)address;
     }
@@ -303,7 +304,7 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
     else {
         struct sockaddr_in6 socket_address;
         memset(&socket_address, 0, sizeof(socket_address));
-        socket_address.sin6_len      = sizeof(socket_address);
+        MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
         socket_address.sin6_family   = AF_INET6;
         socket_address.sin6_port     = htons(port);
         socket_address.sin6_flowinfo = htonl(flowinfo);
@@ -312,7 +313,8 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
 
         MVMROOT(tc, presentation, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-            memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
+            memcpy(&address->body.storage, &socket_address,
+                MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
         });
     }
 
@@ -334,7 +336,7 @@ MVMObject * MVM_address_from_ipv6_native(MVMThreadContext *tc,
             native_address.s6_addr[i] = (MVMuint8)MVM_repr_at_pos_i(tc, (MVMObject *)native_address_buf, i);
 
         memset(&socket_address, 0, sizeof(socket_address));
-        socket_address.sin6_len      = sizeof(socket_address);
+        MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
         socket_address.sin6_family   = AF_INET6;
         socket_address.sin6_port     = htons(port);
         socket_address.sin6_flowinfo = htonl(flowinfo);
@@ -343,7 +345,8 @@ MVMObject * MVM_address_from_ipv6_native(MVMThreadContext *tc,
 
         MVMROOT(tc, native_address_buf, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-            memcpy(&address->body.storage, &socket_address, socket_address.sin6_len);
+            memcpy(&address->body.storage, &socket_address,
+                MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
         });
         return (MVMObject *)address;
     }
@@ -367,14 +370,16 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
     } else {
         struct sockaddr_un socket_address;
         memset(&socket_address, 0, sizeof(socket_address));
-        socket_address.sun_len    = sizeof(socket_address) - sizeof(socket_address.sun_path) + sun_len;
+        MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address,
+            sizeof(socket_address) - sizeof(socket_address.sun_path) + sun_len);
         socket_address.sun_family = AF_UNIX;
         strcpy(socket_address.sun_path, path_cstr);
         MVM_free(path_cstr);
 
         MVMROOT(tc, path, {
             address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
-            memcpy(&address->body.storage, &socket_address, sizeof(socket_address));
+            memcpy(&address->body.storage, &socket_address,
+                MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
         });
 
         return (MVMObject *)address;
@@ -415,18 +420,16 @@ MVMString * MVM_address_to_presentation(MVMThreadContext *tc, MVMAddress *addres
                 });
             break;
         }
+#if !defined(_WIN32) && defined(AF_UNIX)
         case AF_UNIX: {
-#ifdef AF_UNIX
             MVMROOT(tc, address, {
                 struct sockaddr_un *socket_address = (struct sockaddr_un *)&address->body.storage;
                 presentation = MVM_string_latin1_decode(tc,
                         tc->instance->VMString, socket_address->sun_path, socket_address->sun_len + 1);
             });
-#else
-            MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
-#endif
             break;
         }
+#endif
         default:
             MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", address->body.storage.ss_family);
             break;
@@ -476,8 +479,10 @@ MVMObject * MVM_address_to_native_address(MVMThreadContext *tc, MVMAddress *addr
                 });
                 break;
             }
+#if !defined(_WIN32) && defined(AF_UNIX)
             case AF_UNIX:
                 MVM_exception_throw_adhoc(tc, "Cannot convert UNIX socket addresses to their native format");
+#endif
             default:
                 MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", address->body.storage.ss_family);
         }

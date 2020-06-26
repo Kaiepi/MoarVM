@@ -1,3 +1,9 @@
+#ifdef _WIN32
+typedef ULONG  in_addr_t;
+typedef USHORT in_port_t;
+typedef USHORT sa_family_t;
+#endif
+
 #define MVM_ADDRESS_FAMILY_UNSPEC 0
 #define MVM_ADDRESS_FAMILY_INET   1
 #define MVM_ADDRESS_FAMILY_INET6  2
@@ -27,6 +33,30 @@ struct MVMAddress {
 
 const MVMREPROps * MVMAddress_initialize(MVMThreadContext *tc);
 
+MVM_STATIC_INLINE socklen_t MVM_address_get_storage_length(MVMThreadContext *tc,
+        struct sockaddr *address) {
+#ifdef _WIN32
+    switch (address->sa_family) {
+        case AF_INET:
+            return sizeof(struct sockaddr_in);
+        case AF_INET6:
+            return sizeof(struct sockaddr_in6);
+        default:
+            MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", address->sa_family);
+    }
+#else
+    return address->sa_len;
+#endif
+}
+
+MVM_STATIC_INLINE void MVM_address_set_storage_length(MVMThreadContext *tc,
+        struct sockaddr *address, socklen_t address_len) {
+#ifndef _WIN32
+    address->sa_len = address_len;
+#endif
+}
+
+/* TODO: Give better names. */
 sa_family_t MVM_address_to_native_family(MVMThreadContext *tc, MVMint64 family);
 MVMint64    MVM_address_from_native_family(MVMThreadContext *tc, sa_family_t family);
 int         MVM_address_to_native_type(MVMThreadContext *tc, MVMint64 type);
