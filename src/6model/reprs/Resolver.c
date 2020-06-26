@@ -24,7 +24,8 @@ static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, voi
     MVMResolverContext *context;
     int                 error;
 
-    if (!ares_library_initialized()
+    /* ares_library_initialized returns an error code if the library hasn't been initialized yet, not 0! */
+    if (ares_library_initialized()
      && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc)))
         MVM_exception_throw_adhoc(tc,
             "Failed to initialize a DNS resolution context: %s",
