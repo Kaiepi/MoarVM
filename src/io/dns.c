@@ -24,7 +24,7 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
     hints.ai_family   = MVM_address_to_native_family(tc, family);
     hints.ai_socktype = MVM_address_to_native_type(tc, type);
     hints.ai_protocol = MVM_address_to_native_protocol(tc, protocol);
-    hints.ai_flags    = AI_ADDRCONFIG | AI_NUMERICSERV;
+    hints.ai_flags    = AI_NUMERICSERV;
     if (passive) hints.ai_flags |= AI_PASSIVE;
 
     host_cstr = MVM_string_utf8_encode_C_string(tc, host);
@@ -52,7 +52,7 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
                 native_address_info = native_address_info->ai_next
             ) {
                 int protocol = native_address_info->ai_protocol;
-                if (protocol == IPPROTO_TCP || protocol == IPPROTO_UDP || protocol == IPPROTO_RAW) {
+                if (protocol == 0 || protocol == IPPROTO_TCP || protocol == IPPROTO_UDP || protocol == IPPROTO_RAW) {
                     MVMObject  *address_info   = NULL;
                     MVMAddress *address        = NULL;
                     MVMObject  *boxed_family   = NULL;
