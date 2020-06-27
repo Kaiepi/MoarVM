@@ -2548,7 +2548,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         MVMint16 port = ins->operands[2].reg.orig;
         MVMint16 flowinfo = ins->operands[3].reg.orig;
         MVMint16 scope_id = ins->operands[4].reg.orig;
-        | mov ARG2, aword buf;
+        | mov ARG2, aword WORK[buf];
         | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_VMArray;
         | jne >1;
         | test_type_object ARG2;
