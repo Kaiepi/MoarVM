@@ -119,7 +119,7 @@ static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
     uv_sem_destroy(&resolver->body.sem_contexts);
 
     /* XXX: Belongs elsewhere. */
-    if (ares_library_initialized())
+    if (!ares_library_initialized())
         ares_library_cleanup();
 }
 
