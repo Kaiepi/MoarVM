@@ -131,8 +131,8 @@ static void poll_connection(void *data, ares_socket_t connection, int readable, 
 static void process_query(uv_poll_t *handle, int status, int events) {
     MVMResolverContext *context = (MVMResolverContext *)handle->data;
     ares_process_fd(context->channel,
-        events & UV_READABLE ? context->connection : ARES_SOCKET_BAD,
-        events & UV_WRITABLE ? context->connection : ARES_SOCKET_BAD);
+        (events & UV_READABLE) ? context->connection : ARES_SOCKET_BAD,
+        (events & UV_WRITABLE) ? context->connection : ARES_SOCKET_BAD);
 }
 
 /* Callback that processes the response to a DNS query. */
