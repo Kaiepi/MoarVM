@@ -142,6 +142,8 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
     MVMResolverContext *context  = qi->context;
     MVMThreadContext   *tc       = context->tc;
     MVMAsyncTask       *task     = MVM_io_eventloop_get_active_work(tc, context->work_idx);
+    uv_poll_stop(context->handle);
+
     if (status) {
         MVMROOT(tc, task, {
             MVMObject *arr;
@@ -290,21 +292,16 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
         }
     }
 
-    if (context->handle) {
-        uv_poll_stop(context->handle);
-        MVM_free_null(context->handle);
-    }
     MVM_io_eventloop_remove_active_work(context->tc, &(context->work_idx));
+    MVM_free_null(context->handle);
     uv_sem_post(&context->sem_query);
     uv_sem_post(&resolver->body.sem_contexts);
 }
 
 static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
     QueryInfo          *qi;
-    MVMResolverContext *context;
     MVMResolver        *resolver;
-    size_t              i;
-    char               *question;
+    MVMResolverContext *context;
 
     /* Grab a DNS resolution context and set it up with our query info: */
     qi       = (QueryInfo *)data;
