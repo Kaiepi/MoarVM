@@ -20,29 +20,17 @@ static MVMObject * type_object_for(MVMThreadContext *tc, MVMObject *HOW) {
 
 /* Initializes a new instance. */
 static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data) {
-    MVMResolverBody    *body;
-    MVMResolverContext *context;
-    int                 error;
+    MVMResolverBody *body;
+    int              error;
 
-    /* ares_library_initialized returns an error code if the library hasn't been initialized yet, not 0! */
+    body = (MVMResolverBody *)data;
     if (ares_library_initialized()
-     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc)))
+     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc))
+     || (error = ares_init(&body->channel)))
         MVM_exception_throw_adhoc(tc,
             "Failed to initialize a DNS resolution context: %s",
             ares_strerror(error));
-
-    body = (MVMResolverBody *)data;
-    for (context = body->contexts; context != body->contexts + MVM_RESOLVER_POOL_SIZE; ++context) {
-        if ((error = ares_init(&context->channel)))
-            MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS resolution context: %s",
-                ares_strerror(error));
-        if ((error = uv_sem_init(&context->sem_query, 1)))
-            MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS resolution context: %s",
-                uv_strerror(error));
-    }
-    if ((error = uv_sem_init(&body->sem_contexts, MVM_RESOLVER_POOL_SIZE)))
+    if ((error = uv_sem_init(&body->sem_handles, MVM_RESOLVER_POOL_LEN)))
         MVM_exception_throw_adhoc(tc,
             "Failed to initialize a DNS resolution context: %s",
             uv_strerror(error));
@@ -74,28 +62,17 @@ static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerial
 
 /* Deserializes the data. */
 static void deserialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data, MVMSerializationReader *reader) {
-    MVMResolverBody    *body;
-    MVMResolverContext *context;
-    int                 error;
+    MVMResolverBody *body;
+    int              error;
 
-    if (!ares_library_initialized()
-     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc)))
+    body = (MVMResolverBody *)data;
+    if (ares_library_initialized()
+     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc))
+     || (error = ares_init(&body->channel)))
         MVM_exception_throw_adhoc(tc,
             "Failed to initialize a DNS resolution context: %s",
             ares_strerror(error));
-
-    body = (MVMResolverBody *)data;
-    for (context = body->contexts; context != body->contexts + MVM_RESOLVER_POOL_SIZE; ++context) {
-        if ((error = ares_init(&context->channel)))
-            MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS resolution context: %s",
-                ares_strerror(error));
-        if ((error = uv_sem_init(&context->sem_query, 1)))
-            MVM_exception_throw_adhoc(tc,
-                "Failed to initialize a DNS resolution context: %s",
-                uv_strerror(error));
-    }
-    if ((error = uv_sem_init(&body->sem_contexts, MVM_RESOLVER_POOL_SIZE)))
+    if ((error = uv_sem_init(&body->sem_handles, MVM_RESOLVER_POOL_LEN)))
         MVM_exception_throw_adhoc(tc,
             "Failed to initialize a DNS resolution context: %s",
             uv_strerror(error));
@@ -108,15 +85,9 @@ static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSeri
 
 /* Called by the VM in order to free memory associated with this object. */
 static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
-    MVMResolver        *resolver;
-    MVMResolverContext *context;
-
-    resolver = (MVMResolver *)obj;
-    for (context = resolver->body.contexts; context != resolver->body.contexts + MVM_RESOLVER_POOL_SIZE; ++context) {
-        ares_destroy(context->channel);
-        uv_sem_destroy(&context->sem_query);
-    }
-    uv_sem_destroy(&resolver->body.sem_contexts);
+    MVMResolver *resolver = (MVMResolver *)obj;
+    ares_destroy(resolver->body.channel);
+    uv_sem_destroy(&resolver->body.sem_handles);
 
     /* XXX: Belongs elsewhere. */
     if (!ares_library_initialized())
