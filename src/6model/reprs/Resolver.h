@@ -1,24 +1,20 @@
-#define MVM_RESOLVER_POOL_SIZE 16
+/* Size of the pool for pending DNS queries.
+ * This must be a prime number in order for hashing of file descriptors to work. */
+#define MVM_RESOLVER_POOL_SIZE 31
 
-/* A DNS resolution context. This keeps track of state that needs to persist
-   between DNS queries. The body of a Resolver keeps a pool of these, since
-   c-ares' channels misbehave when being used over multiple threads. */
-struct MVMResolverContext {
-    ares_channel  channel;
-    int           configured;
-    uv_sem_t      sem_query;
-
-    MVMThreadContext *tc;
-    int               work_idx;
-    uv_loop_t        *loop;
-    ares_socket_t     connection;
-    uv_poll_t        *handle;
+/* Handle used to make a pending DNS query. */
+struct MVMResolverHandle {
+    uv_poll_t    handle;
+    AO_t         connection;
+    MVMResolver *resolver;
 };
 
 /* Representation used by DNS resolvers. */
 struct MVMResolverBody {
-    MVMResolverContext contexts[MVM_RESOLVER_POOL_SIZE];
-    uv_sem_t           sem_contexts;
+    ares_channel      channel;
+    int               configured;
+    uv_mutex_t        mutex_configured;
+    MVMResolverHandle handles[MVM_RESOLVER_POOL_SIZE];
 };
 
 struct MVMResolver {

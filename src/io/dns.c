@@ -90,11 +90,14 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
 
 /* Information pertaining to an asynchronou DNS query. */
 typedef struct {
-    MVMResolver        *resolver;
-    char               *question;
-    int                 class;
-    int                 type;
-    MVMResolverContext *context;
+    MVMResolver *resolver;
+    char        *question;
+    int          class;
+    int          type;
+
+    MVMThreadContext *tc;
+    int               work_idx;
+    MVMAsyncTask     *async_task;
 } QueryInfo;
 
 static void poll_connection(void *data, ares_socket_t connection, int readable, int writable);
@@ -104,46 +107,41 @@ static void get_answer(void *arg, int status, int timeouts, unsigned char *answe
 /* Callback called after making a connection to a DNS server during a DNS
  * query. */
 static void poll_connection(void *data, ares_socket_t connection, int readable, int writable) {
-    if (!readable && !writable)
+    MVMResolver       *resolver    = (MVMResolver *)data;
+#ifdef _WIN32
+    size_t             handle_idx  = (uintptr_t)connection / 8 % MVM_RESOLVER_POOL_SIZE;
+#else
+    size_t             handle_idx  = connection % MVM_RESOLVER_POOL_SIZE;
+#endif
+    MVMResolverHandle *handle      = resolver->body.handles + handle_idx;
+    uv_poll_t         *poll_handle = (uv_poll_t *)handle;
+    if (!readable && !writable) {
+        uv_poll_stop(poll_handle);
+        MVM_store(&handle->connection, (intptr_t)ARES_SOCKET_BAD);
         return;
+    }
     else {
-        MVMResolverContext *context = *(MVMResolverContext **)data;
-        if (!context->handle) {
-            int error;
-
-            context->connection   = connection;
-            context->handle       = MVM_malloc(sizeof(uv_poll_t));
-            context->handle->data = context;
-            if ((error = uv_poll_init_socket(context->loop, context->handle, connection))) {
-                /* TODO: Give a proper error here instead of letting
-                 * ARES_ECANCELLED get thrown in get_answer. */
-                ares_cancel(context->channel);
-                return;
-            }
-        }
-        uv_poll_start(context->handle,
-            (readable ? UV_READABLE : 0) | (writable ? UV_WRITABLE : 0),
-            process_query);
+        if (MVM_cas(&handle->connection, ARES_SOCKET_BAD, connection) == ARES_SOCKET_BAD)
+            /* This can theoretically error out, but that should never happen. */
+            (void)uv_poll_init_socket(poll_handle->loop, poll_handle, connection);
+        uv_poll_start(poll_handle, (readable ? UV_READABLE : 0) | (writable ? UV_WRITABLE : 0), process_query);
     }
 }
 
 /* Callback that polls a connection to a DNS server during a query. */
-static void process_query(uv_poll_t *handle, int status, int events) {
-    MVMResolverContext *context = (MVMResolverContext *)handle->data;
-    ares_process_fd(context->channel,
-        (events & UV_READABLE) ? context->connection : ARES_SOCKET_BAD,
-        (events & UV_WRITABLE) ? context->connection : ARES_SOCKET_BAD);
+static void process_query(uv_poll_t *poll_handle, int status, int events) {
+    MVMResolverHandle *handle = (MVMResolverHandle *)poll_handle;
+    ares_process_fd(handle->resolver->body.channel,
+        (events & UV_READABLE) ? handle->connection : ARES_SOCKET_BAD,
+        (events & UV_WRITABLE) ? handle->connection : ARES_SOCKET_BAD);
 }
 
 /* Callback that processes the response to a DNS query. */
 static void get_answer(void *data, int status, int timeouts, unsigned char *answer, int answer_len) {
-    QueryInfo          *qi       = (QueryInfo *)data;
-    MVMResolver        *resolver = qi->resolver;
-    MVMResolverContext *context  = qi->context;
-    MVMThreadContext   *tc       = context->tc;
-    MVMAsyncTask       *task     = MVM_io_eventloop_get_active_work(tc, context->work_idx);
-    uv_poll_stop(context->handle);
-
+    QueryInfo        *qi       = (QueryInfo *)data;
+    MVMResolver      *resolver = qi->resolver;
+    MVMThreadContext *tc       = qi->tc;
+    MVMAsyncTask     *task     = qi->async_task;
     if (status) {
         MVMROOT(tc, task, {
             MVMObject *arr;
@@ -292,61 +290,62 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
         }
     }
 
-    MVM_io_eventloop_remove_active_work(context->tc, &(context->work_idx));
-    MVM_free_null(context->handle);
-    uv_sem_post(&context->sem_query);
-    uv_sem_post(&resolver->body.sem_contexts);
+    MVM_io_eventloop_remove_active_work(qi->tc, &(qi->work_idx));
 }
 
 static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
-    QueryInfo          *qi;
-    MVMResolver        *resolver;
-    MVMResolverContext *context;
+    MVMAsyncTask      *task;
+    QueryInfo         *qi;
+    MVMResolver       *resolver;
 
-    /* Grab a DNS resolution context and set it up with our query info: */
-    qi       = (QueryInfo *)data;
-    resolver = qi->resolver;
-    MVM_gc_mark_thread_blocked(tc);
-    uv_sem_wait(&resolver->body.sem_contexts);
-    MVM_gc_mark_thread_unblocked(tc);
-    for (context = resolver->body.contexts; context != resolver->body.contexts + MVM_RESOLVER_POOL_SIZE; ++context) {
-        if (!uv_sem_trywait(&context->sem_query)) {
-            qi->context = context;
-            break;
-        }
-    }
+    /* Finish setting up our query info. */
+    task         = (MVMAsyncTask *)async_task;
+    qi           = (QueryInfo *)data;
+    qi->tc       = tc;
+    qi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
+    MVM_ASSIGN_REF(tc, &(task->common.header), qi->async_task, task);
 
     /* Prepare the DNS resolution context: */
-    if (!context->configured) {
+    resolver = qi->resolver;
+    MVM_gc_mark_thread_blocked(tc);
+    uv_mutex_lock(&resolver->body.mutex_configured);
+    MVM_gc_mark_thread_unblocked(tc);
+    if (!resolver->body.configured) {
         struct ares_options options;
         int                 mask;
         int                 error;
 
         memset(&options, 0, sizeof(options));
-        options.sock_state_cb      = poll_connection;
-        options.sock_state_cb_data = &context;
-        mask                       = ARES_OPT_SOCK_STATE_CB;
-        if ((error = ares_init_options(&context->channel, &options, mask))) {
-            uv_sem_post(&context->sem_query);
-            uv_sem_post(&resolver->body.sem_contexts);
+        options.sock_state_cb = poll_connection;
+        MVM_ASSIGN_REF(tc, &(resolver->common.header), options.sock_state_cb_data, resolver);
+        mask                  = ARES_OPT_SOCK_STATE_CB;
+        if ((error = ares_init_options(&resolver->body.channel, &options, mask))) {
+            uv_mutex_unlock(&resolver->body.mutex_configured);
             MVM_exception_throw_adhoc(tc,
                 "Failed to configure a DNS resolution context: %s",
                 ares_strerror(error));
         }
-        context->configured = 1;
+        else {
+            MVMResolverHandle *handle;
+            for (handle = resolver->body.handles; handle != resolver->body.handles + MVM_RESOLVER_POOL_SIZE; ++handle) {
+                ((uv_poll_t *)handle)->loop = loop;
+                handle->connection          = (AO_t)ARES_SOCKET_BAD;
+                MVM_ASSIGN_REF(tc, &(resolver->common.header), handle->resolver, resolver);
+            }
+            resolver->body.configured = 1;
+        }
     }
-    context->tc       = tc;
-    context->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
-    context->loop     = loop;
+    uv_mutex_unlock(&resolver->body.mutex_configured);
 
     /* Start the DNS query: */
-    ares_query(context->channel, qi->question, qi->class, qi->type, get_answer, qi);
+    ares_query(resolver->body.channel, qi->question, qi->class, qi->type, get_answer, qi);
     /* poll_connection or get_answer should get called at some point after this. */
 }
 
 static void query_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
     QueryInfo *qi = (QueryInfo *)data;
     MVM_gc_worklist_add(tc, worklist, &(qi->resolver));
+    MVM_gc_worklist_add(tc, worklist, &(qi->async_task));
 }
 
 static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *data) {
