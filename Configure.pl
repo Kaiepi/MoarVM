@@ -374,12 +374,10 @@ else {
     $config{heapsnapformat} = 2;
 }
 
-# TODO: --has-ares flag
-$config{moar_cincludes} .= ' ' . $defaults{ccinc} . '3rdparty/c-ares';
-$config{install}        .= "\t\$(MKPATH) \"\$(DESTDIR)\$(PREFIX)/include/c-ares\"\n"
-                         . "\t\$(CP) 3rdparty/c-ares/*.h \"\$(DESTDIR)\$(PREFIX)/include/c-ares\"\n";
-# XXX: Probably belongs more in build/setup.pm.
-push @{$config{defs}}, 'CARES_STATICLIB' if $^O eq 'MSWin32' && $config{make} eq 'nmake';
+# TODO: --has-udns flag
+$config{moar_cincludes} .= ' ' . $defaults{ccinc} . '3rdparty/udns';
+$config{install}        .= "\t\$(MKPATH) \"\$(DESTDIR)\$(PREFIX)/include/udns\"\n"
+                         . "\t\$(CP) 3rdparty/udns/udns.h \"\$(DESTDIR)\$(PREFIX)/include/udns\"\n";
 
 # mangle library names
 $config{ldlibs} = join ' ',

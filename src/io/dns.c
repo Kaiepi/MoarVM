@@ -1,4 +1,6 @@
 #include "moar.h"
+#include "platform/random.h"
+#include "platform/time.h"
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
@@ -97,75 +99,79 @@ typedef struct {
 
     MVMThreadContext *tc;
     int               work_idx;
-    MVMAsyncTask     *async_task;
+    struct dns_query *query;
 } QueryInfo;
 
-static void poll_connection(void *data, ares_socket_t connection, int readable, int writable);
+static void poll_query(struct dns_ctx *ctx, int timeout, void *data);
 static void process_query(uv_poll_t *handle, int status, int events);
-static void get_answer(void *arg, int status, int timeouts, unsigned char *answer, int answer_len);
+static void process_response(struct dns_ctx *ctx, void *result, void *data);
 
-/* Callback called after making a connection to a DNS server during a DNS
- * query. */
-static void poll_connection(void *data, ares_socket_t connection, int readable, int writable) {
-    MVMResolver       *resolver    = (MVMResolver *)data;
-#ifdef _WIN32
-    size_t             handle_idx  = (uintptr_t)connection / 8 % MVM_RESOLVER_POOL_SIZE;
-#else
-    size_t             handle_idx  = connection % MVM_RESOLVER_POOL_SIZE;
-#endif
-    MVMResolverHandle *handle      = resolver->body.handles + handle_idx;
-    uv_poll_t         *poll_handle = (uv_poll_t *)handle;
-    if (!readable && !writable) {
-        uv_poll_stop(poll_handle);
-        MVM_store(&handle->connection, (intptr_t)ARES_SOCKET_BAD);
-        return;
+static void poll_query(struct dns_ctx *ctx, int timeout, void *data) {
+    if (data) {
+        uv_poll_t *handle = (uv_poll_t *)data;
+        if (timeout >= 0)
+            uv_poll_start(handle, UV_WRITABLE, process_query);
+        else
+            uv_poll_stop(handle);
     }
+}
+
+static void process_query(uv_poll_t *handle, int status, int events) {
+    if (status);
+        /* TODO: Proper error handling. */
     else {
-        if (MVM_cas(&handle->connection, ARES_SOCKET_BAD, connection) == ARES_SOCKET_BAD)
-            /* This can theoretically error out, but that should never happen. */
-            (void)uv_poll_init_socket(poll_handle->loop, poll_handle, connection);
-        uv_poll_start(poll_handle, (readable ? UV_READABLE : 0) | (writable ? UV_WRITABLE : 0), process_query);
+        struct dns_ctx *ctx = (struct dns_ctx *)handle->data;
+        if (events & UV_WRITABLE) {
+            /* Typically, you would call dns_timeouts before poll(3). However,
+             * because this function handles sending data to a DNS server, call
+             * it during the I/O phase of the event loop instead and ignore
+             * the timeout it returns. */
+            MVMuint64 now = MVM_platform_now();
+            (void)dns_timeouts(ctx, -1, now);
+            uv_poll_start(handle, UV_READABLE, process_query);
+        }
+        if (events & UV_READABLE) {
+            MVMuint64 now = MVM_platform_now();
+            dns_ioevent(ctx, now);
+        }
     }
 }
 
-/* Callback that polls a connection to a DNS server during a query. */
-static void process_query(uv_poll_t *poll_handle, int status, int events) {
-    MVMResolverHandle *handle = (MVMResolverHandle *)poll_handle;
-    ares_process_fd(handle->resolver->body.channel,
-        (events & UV_READABLE) ? handle->connection : ARES_SOCKET_BAD,
-        (events & UV_WRITABLE) ? handle->connection : ARES_SOCKET_BAD);
-}
-
-/* Callback that processes the response to a DNS query. */
-static void get_answer(void *data, int status, int timeouts, unsigned char *answer, int answer_len) {
-    QueryInfo        *qi       = (QueryInfo *)data;
-    MVMResolver      *resolver = qi->resolver;
-    MVMThreadContext *tc       = qi->tc;
-    MVMAsyncTask     *task     = qi->async_task;
-    if (status) {
+static void process_response(struct dns_ctx *ctx, void *result, void *data) {
+    QueryInfo        *qi   = (QueryInfo *)data;
+    MVMThreadContext *tc   = qi->tc;
+    MVMAsyncTask     *task = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
+    if (!result) {
         MVMROOT(tc, task, {
-            MVMObject *arr;
-            MVMString *msg_string;
+            MVMObject  *arr      = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+            MVMString  *msg_str  = NULL;
+            const char *msg_cstr = NULL;
+            switch (dns_status(ctx)) {
+                case DNS_E_NODATA:
+                    /* Ignore. We let the runtime know when this happens by
+                     * giving it an empty response. */
+                    break;
+                default:
+                    msg_cstr = dns_strerror(dns_status(ctx));
+                    break;
+            }
 
-            arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
             MVM_repr_push_o(tc, arr, task->body.schedulee);
-            if (status == ARES_ENODATA)
+            if (msg_cstr == NULL)
                 MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-            else {
+            else
                 MVMROOT(tc, arr, {
-                    msg_string = MVM_string_ascii_decode_nt(tc,
-                        tc->instance->VMString, ares_strerror(status));
-                    MVMROOT(tc, msg_string, {
+                    msg_str = MVM_string_ascii_decode_nt(tc, tc->instance->VMString, msg_cstr);
+                    MVMROOT(tc, msg_str, {
                         MVMObject *msg_box = MVM_repr_box_str(tc,
-                            tc->instance->boot_types.BOOTStr, msg_string);
+                            tc->instance->boot_types.BOOTStr, msg_str);
                         MVM_repr_push_o(tc, arr, msg_box);
                     });
                 });
-            }
             switch (qi->type) {
                 case MVM_DNS_RECORD_TYPE_A:
                 case MVM_DNS_RECORD_TYPE_AAAA:
-                    MVMROOT2(tc, arr, msg_string, {
+                    MVMROOT2(tc, arr, msg_str, {
                         MVMObject *presentations = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
                         MVM_repr_push_o(tc, arr, presentations);
                     });
@@ -179,51 +185,31 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
     else {
         switch (qi->type) {
             case MVM_DNS_RECORD_TYPE_A: {
-                struct hostent *host;
-                int             error;
-                const char     *errstr;
-
-                errstr = NULL;
-                if ((error = ares_parse_a_reply(answer, answer_len, &host, NULL, NULL)))
-                    errstr = ares_strerror(error);
-
                 MVMROOT(tc, task, {
                     MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
                     MVM_repr_push_o(tc, arr, task->body.schedulee);
                     MVMROOT(tc, arr, {
-                        MVMObject *addresses;
-                        size_t     i;
+                        struct dns_rr_a4 *answer;
+                        MVMObject        *addresses;
+                        size_t            i;
 
+                        answer    = (struct dns_rr_a4 *)result;
                         addresses = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-                        if (errstr) {
+                        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+                        for (i = 0; i < answer->dnsa4_nrr; ++i) {
+                            struct in_addr     native_address = answer->dnsa4_addr[i];
+                            struct sockaddr_in socket_address;
+                            memset(&socket_address, 0, sizeof(socket_address));
+                            MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
+                            socket_address.sin_family = AF_INET;
+                            memcpy(&socket_address.sin_addr, &native_address, sizeof(struct in_addr));
                             MVMROOT(tc, addresses, {
-                                MVMString *msg_string = MVM_string_ascii_decode_nt(tc,
-                                    tc->instance->VMString, errstr);
-                                MVMROOT(tc, msg_string, {
-                                    MVMObject *msg_box = MVM_repr_box_str(tc,
-                                        tc->instance->boot_types.BOOTStr, msg_string);
-                                    MVM_repr_push_o(tc, arr, msg_box);
-                                });
+                                MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
+                                    tc->instance->boot_types.BOOTAddress);
+                                memcpy(&address->body.storage, &socket_address,
+                                    MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
+                                MVM_repr_push_o(tc, addresses, (MVMObject *)address);
                             });
-                        }
-                        else {
-                            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-                            for (i = 0; host->h_addr_list[i]; ++i) {
-                                struct in_addr     *native_address = (struct in_addr *)host->h_addr_list[i];
-                                struct sockaddr_in  socket_address;
-                                memset(&socket_address, 0, sizeof(socket_address));
-                                MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
-                                socket_address.sin_family = AF_INET;
-                                memcpy(&socket_address.sin_addr, native_address, sizeof(struct in_addr));
-                                MVMROOT(tc, addresses, {
-                                    MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
-                                        tc->instance->boot_types.BOOTAddress);
-                                    memcpy(&address->body.storage, &socket_address,
-                                        MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
-                                    MVM_repr_push_o(tc, addresses, (MVMObject *)address);
-                                });
-                            }
-                            ares_free_hostent(host);
                         }
                         MVM_repr_push_o(tc, arr, addresses);
                     });
@@ -232,52 +218,31 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
                 break;
             }
             case MVM_DNS_RECORD_TYPE_AAAA: {
-                struct hostent *host;
-                int             error;
-                const char     *errstr;
-
-                errstr = NULL;
-                if ((error = ares_parse_aaaa_reply(answer, answer_len, &host, NULL, NULL)))
-                    errstr = ares_strerror(error);
-
                 MVMROOT(tc, task, {
                     MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
                     MVM_repr_push_o(tc, arr, task->body.schedulee);
                     MVMROOT(tc, arr, {
-                        MVMObject *addresses;
-                        size_t     i;
+                        struct dns_rr_a6 *answer;
+                        MVMObject        *addresses;
+                        size_t            i;
 
+                        answer    = (struct dns_rr_a6 *)result;
                         addresses = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
-                        if (errstr) {
+                        MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
+                        for (i = 0; i < answer->dnsa6_nrr; ++i) {
+                            struct in6_addr     native_address = answer->dnsa6_addr[i];
+                            struct sockaddr_in6 socket_address;
+                            memset(&socket_address, 0, sizeof(socket_address));
+                            MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
+                            socket_address.sin6_family = AF_INET6;
+                            memcpy(&socket_address.sin6_addr, &native_address, sizeof(struct in6_addr));
                             MVMROOT(tc, addresses, {
-                                MVMString *msg_string = MVM_string_ascii_decode_nt(tc,
-                                    tc->instance->VMString, errstr);
-                                MVMROOT(tc, msg_string, {
-                                    MVMObject *msg_box = MVM_repr_box_str(tc,
-                                        tc->instance->boot_types.BOOTStr, msg_string);
-                                    MVM_repr_push_o(tc, arr, msg_box);
-                                });
+                                MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
+                                    tc->instance->boot_types.BOOTAddress);
+                                memcpy(&address->body.storage, &socket_address,
+                                    MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
+                                MVM_repr_push_o(tc, addresses, (MVMObject *)address);
                             });
-                            MVM_repr_push_o(tc, arr, addresses);
-                        }
-                        else {
-                            MVM_repr_push_o(tc, arr, tc->instance->boot_types.BOOTStr);
-                            for (i = 0; host->h_addr_list[i]; ++i) {
-                                struct in6_addr     *native_address = (struct in6_addr *)host->h_addr_list[i];
-                                struct sockaddr_in6  socket_address;
-                                memset(&socket_address, 0, sizeof(socket_address));
-                                MVM_address_set_storage_length(tc, (struct sockaddr *)&socket_address, sizeof(socket_address));
-                                socket_address.sin6_family = AF_INET6;
-                                memcpy(&socket_address.sin6_addr, native_address, sizeof(struct in6_addr));
-                                MVMROOT(tc, addresses, {
-                                    MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc,
-                                        tc->instance->boot_types.BOOTAddress);
-                                    memcpy(&address->body.storage, &socket_address,
-                                        MVM_address_get_storage_length(tc, (struct sockaddr *)&socket_address));
-                                    MVM_repr_push_o(tc, addresses, (MVMObject *)address);
-                                });
-                            }
-                            ares_free_hostent(host);
                         }
                         MVM_repr_push_o(tc, arr, addresses);
                     });
@@ -288,64 +253,64 @@ static void get_answer(void *data, int status, int timeouts, unsigned char *answ
             default:
                 MVM_exception_throw_adhoc(tc, "Unsupported DNS query type: %d", qi->type);
         }
+
+        MVM_free(result);
     }
 
-    MVM_io_eventloop_remove_active_work(qi->tc, &(qi->work_idx));
+    MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
 }
 
 static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
-    MVMAsyncTask      *task;
-    QueryInfo         *qi;
-    MVMResolver       *resolver;
+    QueryInfo          *qi;
+    MVMResolver        *resolver;
+    MVMuint8            context_idx;
+    MVMResolverContext *context;
+    dns_parse_fn       *parser;
 
-    /* Finish setting up our query info. */
-    task         = (MVMAsyncTask *)async_task;
+    /* Get our DNS resolution context... */
     qi           = (QueryInfo *)data;
-    qi->tc       = tc;
-    qi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
-    MVM_ASSIGN_REF(tc, &(task->common.header), qi->async_task, task);
+    resolver     = qi->resolver;
+    MVM_getrandom(tc, &context_idx, sizeof(context_idx));
+    context_idx %= MVM_RES_POOL_LEN;
+    context      = &resolver->body.contexts[context_idx];
+    switch (qi->type) {
+        case MVM_DNS_RECORD_TYPE_A:
+            parser = dns_parse_a4;
+            break;
+        case MVM_DNS_RECORD_TYPE_AAAA:
+            parser = dns_parse_a6;
+            break;
+        default:
+            MVM_exception_throw_adhoc(tc, "Unsupported DNS record type: %d\n", qi->type);
+    }
 
-    /* Prepare the DNS resolution context: */
-    resolver = qi->resolver;
-    MVM_gc_mark_thread_blocked(tc);
-    uv_mutex_lock(&resolver->body.mutex_configured);
-    MVM_gc_mark_thread_unblocked(tc);
-    if (!resolver->body.configured) {
-        struct ares_options options;
-        int                 mask;
-        int                 error;
+    /* Configure our DNS resolution context if need be: */
+    if (!MVM_load(&context->configured)) {
+        int fd;
+        int error;
 
-        memset(&options, 0, sizeof(options));
-        options.sock_state_cb = poll_connection;
-        MVM_ASSIGN_REF(tc, &(resolver->common.header), options.sock_state_cb_data, resolver);
-        mask                  = ARES_OPT_SOCK_STATE_CB;
-        if ((error = ares_init_options(&resolver->body.channel, &options, mask))) {
-            uv_mutex_unlock(&resolver->body.mutex_configured);
+        fd = dns_open(context->ctx);
+        if ((error = uv_poll_init(loop, context->handle, fd)))
+            /* XXX: Push to the queue idiot. */
             MVM_exception_throw_adhoc(tc,
-                "Failed to configure a DNS resolution context: %s",
-                ares_strerror(error));
-        }
+                "Failed to set up a DNS resolution context: %s",
+                uv_strerror(error));
         else {
-            MVMResolverHandle *handle;
-            for (handle = resolver->body.handles; handle != resolver->body.handles + MVM_RESOLVER_POOL_SIZE; ++handle) {
-                ((uv_poll_t *)handle)->loop = loop;
-                handle->connection          = (AO_t)ARES_SOCKET_BAD;
-                MVM_ASSIGN_REF(tc, &(resolver->common.header), handle->resolver, resolver);
-            }
-            resolver->body.configured = 1;
+            context->handle->data = context->ctx;
+            dns_set_tmcbck(context->ctx, poll_query, context->handle);
+            MVM_incr(&context->configured);
         }
     }
-    uv_mutex_unlock(&resolver->body.mutex_configured);
 
     /* Start the DNS query: */
-    ares_query(resolver->body.channel, qi->question, qi->class, qi->type, get_answer, qi);
-    /* poll_connection or get_answer should get called at some point after this. */
+    qi->tc       = tc;
+    qi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
+    qi->query    = dns_submit_p(context->ctx, qi->question, qi->class, qi->type, 0, parser, process_response, qi);
 }
 
 static void query_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
     QueryInfo *qi = (QueryInfo *)data;
     MVM_gc_worklist_add(tc, worklist, &(qi->resolver));
-    MVM_gc_worklist_add(tc, worklist, &(qi->async_task));
 }
 
 static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *data) {

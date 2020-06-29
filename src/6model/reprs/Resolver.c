@@ -19,21 +19,18 @@ static MVMObject * type_object_for(MVMThreadContext *tc, MVMObject *HOW) {
 }
 
 /* Initializes a new instance. */
+static AO_t call_dns_init = 1;
 static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data) {
-    MVMResolverBody   *body;
-    int                error;
+    MVMResolverBody    *body;
+    MVMResolverContext *context;
 
     body = (MVMResolverBody *)data;
-    if (ares_library_initialized()
-     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc))
-     || (error = ares_init(&body->channel)))
-        MVM_exception_throw_adhoc(tc,
-            "Failed to initialize a DNS resolution context: %s",
-            ares_strerror(error));
-    if ((error = uv_mutex_init(&body->mutex_configured)))
-        MVM_exception_throw_adhoc(tc,
-            "Failed to initialize a DNS resolution context: %s",
-            uv_strerror(error));
+    if (MVM_cas(&call_dns_init, 1, 0))
+        dns_init(NULL, 0);
+    for (context = body->contexts; context != body->contexts + MVM_RES_POOL_LEN; ++context) {
+        context->ctx    = dns_new(NULL);
+        context->handle = MVM_malloc(sizeof(uv_poll_t));
+    }
 }
 
 /* Copies to the body of one object to another. */
@@ -62,20 +59,16 @@ static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerial
 
 /* Deserializes the data. */
 static void deserialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data, MVMSerializationReader *reader) {
-    MVMResolverBody *body;
-    int              error;
+    MVMResolverBody    *body;
+    MVMResolverContext *context;
 
     body = (MVMResolverBody *)data;
-    if (ares_library_initialized()
-     && (error = ares_library_init_mem(ARES_LIB_INIT_ALL, MVM_malloc, MVM_free, MVM_realloc))
-     || (error = ares_init(&body->channel)))
-        MVM_exception_throw_adhoc(tc,
-            "Failed to initialize a DNS resolution context: %s",
-            ares_strerror(error));
-    if ((error = uv_mutex_init(&body->mutex_configured)))
-        MVM_exception_throw_adhoc(tc,
-            "Failed to initialize a DNS resolution context: %s",
-            uv_strerror(error));
+    if (MVM_cas(&call_dns_init, 1, 0))
+        dns_init(NULL, 0);
+    for (context = body->contexts; context != body->contexts + MVM_RES_POOL_LEN; ++context) {
+        context->ctx    = dns_new(NULL);
+        context->handle = MVM_malloc(sizeof(uv_poll_t));
+    }
 }
 
 /* Sets the size of the STable. */
@@ -85,15 +78,14 @@ static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSeri
 
 /* Called by the VM in order to free memory associated with this object. */
 static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
-    MVMResolver *resolver = (MVMResolver *)obj;
+    MVMResolver        *resolver;
+    MVMResolverContext *context;
 
-    ares_destroy(resolver->body.channel);
-    uv_mutex_destroy(&resolver->body.mutex_configured);
-    MVM_free(resolver->body.handles);
-
-    /* XXX: Belongs elsewhere. */
-    if (!ares_library_initialized())
-        ares_library_cleanup();
+    resolver = (MVMResolver *)resolver;
+    for (context = resolver->body.contexts; context != resolver->body.contexts + MVM_RES_POOL_LEN; ++context) {
+        dns_free(context->ctx);
+        MVM_free(context->handle);
+    }
 }
 
 /* Composes the representation. */

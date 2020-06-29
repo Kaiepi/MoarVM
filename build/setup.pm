@@ -35,7 +35,7 @@ our %TP_MT = (
 our %TP_DC = (
     name  => 'dyncall_s',
     path  => '3rdparty/dyncall/dyncall',
-    rule  => 'cd 3rdparty/dyncall &&  ./configure && CC=\'$(CC)\' CFLAGS=\'-fPIC\' $(MAKE) -f Makefile ',
+    rule  => 'cd 3rdparty/dyncall &&  ./configure && CC=\'$(CC)\' CFLAGS=\'$(CFLAGS)\' $(MAKE) -f Makefile ',
     clean => 'cd 3rdparty/dyncall && $(MAKE) -f Makefile clean',
 );
 
@@ -73,14 +73,11 @@ our %TP_UV = (
     # the OS needs to provide a C<src> or C<objects> setting
 );
 
-our %TP_ARES = (
-    name  => 'cares',
-    path  => '3rdparty/c-ares/.libs',
-    rule  => 'cd 3rdparty/c-ares && '
-           . './buildconf && '
-           . 'CC=\'$(CC)\' ./configure --disable-shared --enable-nonblocking && '
-           . 'make libcares.la',
-    clean => 'cd 3rdparty/c-ares && make clean',
+our %TP_UDNS = (
+    name  => 'udns',
+    path  => '3rdparty/udns',
+    rule  => 'cd 3rdparty/udns && CC=\'$(CC)\' CFLAGS=\'$(CFLAGS)\' ./configure && make staticlib',
+    clean => 'cd 3rdparty/udns && make distclean',
 );
 
 our %THIRDPARTY = (
@@ -93,7 +90,7 @@ our %THIRDPARTY = (
     dl   => { %TP_DL },
     uv   => { %TP_UVDUMMY },
     cmp  => { %TP_CMP },
-    ares => { %TP_ARES },
+    udns => { %TP_UDNS },
 );
 
 # shell configuration
@@ -274,11 +271,11 @@ TERM
         dcb => { %TP_DCB, name => 'libdyncallback_s' },
         dl  => { %TP_DL, name => 'libdynload_s' },
 
-        ares => {
-            name  => 'libcares',
-            path  => '3rdparty/c-ares/msvc/cares/lib-release',
-            rule  => 'cd 3rdparty/c-ares && buildconf.bat && $(MAKE) /f Makefile.msvc c-ares CFG=lib-release RTLIBCFG=static',
-            clean => 'cd 3rdparty/c-ares && $(MAKE) /f Makefile.msvc clean CFG=lib-release',
+        udns => {
+            name  => 'udns',
+            path  => '3rdparty/udns',
+            rule  => 'cd 3rdparty/udns && msbuild projects/msvs/udns.Win32/udns.vcxproj /p:configuration=release',
+            clean => 'cd 3rdparty/c-ares && $(RM) udns.lib',
         },
     },
 );

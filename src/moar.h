@@ -31,8 +31,8 @@
 #include <dyncall_callback.h>
 #endif
 
-/* c-ares */
-#include <ares.h>
+/* UDNS */
+#include <udns.h>
 
 /* forward declarations */
 #include "types.h"

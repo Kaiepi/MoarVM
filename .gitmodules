@@ -19,3 +19,9 @@
 [submodule "3rdparty/c-ares"]
 	path = 3rdparty/c-ares
 	url = https://github.com/c-ares/c-ares/
+[submodule "3rdparty/udns"]
+	path = 3rdparty/udns
+	url = https://github.com/ortclib/udns.git
+[submodule "3rdparty/djbdns"]
+	path = 3rdparty/djbdns
+	url = https://github.com/abh/djbdns.git

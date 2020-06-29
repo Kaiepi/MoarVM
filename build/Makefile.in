@@ -714,9 +714,9 @@ tools/repr_size_table@exe@: tools/repr_size_table@obj@ @moarlib@ $(DLL_LIBS)
 
 @dcblib@ @dllib@: @dclib@
 
-@areslib@: @aresobjects@
+@udnslib@: @udnsobjects@
 	$(MSG) linking $@
-	$(CMD)@aresrule@ $(NOOUT)
+	$(CMD)@udnsrule@ $(NOOUT)
 
 pkgconfig/moar.pc: build/mk-moar-pc.pl
 	$(PERL) build/mk-moar-pc.pl $@
