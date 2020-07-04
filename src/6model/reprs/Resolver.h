@@ -7,17 +7,12 @@
  * of 2! */
 #define MVM_RES_POOL_LEN 8
 
-/* A context from which DNS queries can be made. */
-struct MVMResolverContext {
-    struct dns_ctx *ctx;
-    uv_poll_t      *handle;
-    AO_t            configured;
-};
-
 /* Representation used by DNS resolvers to handle a context from which DNS
  * queries can be made. */
 struct MVMResolverBody {
-    MVMResolverContext contexts[MVM_RES_POOL_LEN];
+    struct dns_ctx *ctx;
+    uv_poll_t      *handle;
+    AO_t            configured;
 };
 
 struct MVMResolver {

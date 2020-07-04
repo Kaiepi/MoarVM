@@ -21,16 +21,14 @@ static MVMObject * type_object_for(MVMThreadContext *tc, MVMObject *HOW) {
 /* Initializes a new instance. */
 static AO_t call_dns_init = 1;
 static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data) {
-    MVMResolverBody    *body;
-    MVMResolverContext *context;
+    MVMResolverBody *body;
 
-    body = (MVMResolverBody *)data;
     if (MVM_cas(&call_dns_init, 1, 0))
         dns_init(NULL, 0);
-    for (context = body->contexts; context != body->contexts + MVM_RES_POOL_LEN; ++context) {
-        context->ctx    = dns_new(NULL);
-        context->handle = MVM_malloc(sizeof(uv_poll_t));
-    }
+
+    body         = (MVMResolverBody *)data;
+    body->ctx    = dns_new(NULL);
+    body->handle = MVM_malloc(sizeof(uv_poll_t));
 }
 
 /* Copies to the body of one object to another. */
@@ -59,16 +57,14 @@ static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerial
 
 /* Deserializes the data. */
 static void deserialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data, MVMSerializationReader *reader) {
-    MVMResolverBody    *body;
-    MVMResolverContext *context;
+    MVMResolverBody *body;
 
-    body = (MVMResolverBody *)data;
     if (MVM_cas(&call_dns_init, 1, 0))
         dns_init(NULL, 0);
-    for (context = body->contexts; context != body->contexts + MVM_RES_POOL_LEN; ++context) {
-        context->ctx    = dns_new(NULL);
-        context->handle = MVM_malloc(sizeof(uv_poll_t));
-    }
+
+    body         = (MVMResolverBody *)data;
+    body->ctx    = dns_new(NULL);
+    body->handle = MVM_malloc(sizeof(uv_poll_t));
 }
 
 /* Sets the size of the STable. */
@@ -78,14 +74,9 @@ static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSeri
 
 /* Called by the VM in order to free memory associated with this object. */
 static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
-    MVMResolver        *resolver;
-    MVMResolverContext *context;
-
-    resolver = (MVMResolver *)resolver;
-    for (context = resolver->body.contexts; context != resolver->body.contexts + MVM_RES_POOL_LEN; ++context) {
-        dns_free(context->ctx);
-        MVM_free(context->handle);
-    }
+    MVMResolver *resolver = (MVMResolver *)resolver;
+    dns_free(resolver->body.ctx);
+    MVM_free(resolver->body.handle);
 }
 
 /* Composes the representation. */

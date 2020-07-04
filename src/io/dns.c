@@ -1,6 +1,4 @@
 #include "moar.h"
-#include "platform/random.h"
-#include "platform/time.h"
 
 #ifdef _WIN32
 #include <ws2tcpip.h>
@@ -100,6 +98,7 @@ typedef struct {
     MVMThreadContext *tc;
     int               work_idx;
     struct dns_query *query;
+    int               done;
 } QueryInfo;
 
 static void poll_query(struct dns_ctx *ctx, int timeout, void *data);
@@ -126,21 +125,23 @@ static void process_query(uv_poll_t *handle, int status, int events) {
              * because this function handles sending data to a DNS server, call
              * it during the I/O phase of the event loop instead and ignore
              * the timeout it returns. */
-            MVMuint64 now = MVM_platform_now();
-            (void)dns_timeouts(ctx, -1, now);
+            (void)dns_timeouts(ctx, -1, 0);
             uv_poll_start(handle, UV_READABLE, process_query);
         }
-        if (events & UV_READABLE) {
-            MVMuint64 now = MVM_platform_now();
-            dns_ioevent(ctx, now);
-        }
+        if (events & UV_READABLE)
+            dns_ioevent(ctx, 0);
     }
 }
 
 static void process_response(struct dns_ctx *ctx, void *result, void *data) {
-    QueryInfo        *qi   = (QueryInfo *)data;
-    MVMThreadContext *tc   = qi->tc;
-    MVMAsyncTask     *task = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
+    QueryInfo        *qi;
+    MVMThreadContext *tc;
+    MVMAsyncTask     *task;
+
+    qi       = (QueryInfo *)data;
+    qi->done = 1;
+    tc       = qi->tc;
+    task     = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
     if (!result) {
         MVMROOT(tc, task, {
             MVMObject  *arr      = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
@@ -261,18 +262,13 @@ static void process_response(struct dns_ctx *ctx, void *result, void *data) {
 }
 
 static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
-    QueryInfo          *qi;
-    MVMResolver        *resolver;
-    MVMuint8            context_idx;
-    MVMResolverContext *context;
-    dns_parse_fn       *parser;
+    QueryInfo    *qi;
+    MVMResolver  *resolver;
+    dns_parse_fn *parser;
 
     /* Get our DNS resolution context... */
-    qi           = (QueryInfo *)data;
-    resolver     = qi->resolver;
-    MVM_getrandom(tc, &context_idx, sizeof(context_idx));
-    context_idx %= MVM_RES_POOL_LEN;
-    context      = &resolver->body.contexts[context_idx];
+    qi       = (QueryInfo *)data;
+    resolver = qi->resolver;
     switch (qi->type) {
         case MVM_DNS_RECORD_TYPE_A:
             parser = dns_parse_a4;
@@ -285,27 +281,35 @@ static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
     }
 
     /* Configure our DNS resolution context if need be: */
-    if (!MVM_load(&context->configured)) {
+    if (!MVM_load(&resolver->body.configured)) {
         int fd;
         int error;
 
-        fd = dns_open(context->ctx);
-        if ((error = uv_poll_init(loop, context->handle, fd)))
+        fd = dns_open(resolver->body.ctx);
+        if ((error = uv_poll_init(loop, resolver->body.handle, fd)))
             /* XXX: Push to the queue idiot. */
             MVM_exception_throw_adhoc(tc,
                 "Failed to set up a DNS resolution context: %s",
                 uv_strerror(error));
         else {
-            context->handle->data = context->ctx;
-            dns_set_tmcbck(context->ctx, poll_query, context->handle);
-            MVM_incr(&context->configured);
+            resolver->body.handle->data = resolver->body.ctx;
+            dns_set_tmcbck(resolver->body.ctx, poll_query, resolver->body.handle);
+            MVM_incr(&resolver->body.configured);
         }
     }
 
     /* Start the DNS query: */
     qi->tc       = tc;
     qi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
-    qi->query    = dns_submit_p(context->ctx, qi->question, qi->class, qi->type, 0, parser, process_response, qi);
+    qi->query    = dns_submit_p(resolver->body.ctx, qi->question, qi->class, qi->type, 0, parser, process_response, qi);
+}
+
+static void query_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
+    QueryInfo *qi = (QueryInfo *)data;
+    if (!qi->done) {
+        dns_cancel(qi->resolver->body.ctx, qi->query);
+        MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
+    }
 }
 
 static void query_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
@@ -317,6 +321,7 @@ static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *dat
     if (data) {
         QueryInfo *qi = (QueryInfo *)data;
         MVM_free(qi->question);
+        qi->query = NULL;
         MVM_free(qi);
     }
 }
@@ -324,7 +329,7 @@ static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *dat
 static const MVMAsyncTaskOps query_op_table = {
     query_setup,
     NULL, /* permit */
-    NULL, /* cancel */
+    query_cancel,
     query_gc_mark,
     query_gc_free,
 };
