@@ -88,7 +88,7 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
     return arr;
 }
 
-/* Information pertaining to an asynchronou DNS query. */
+/* Information pertaining to an asynchronous DNS query: */
 typedef struct {
     MVMResolver *resolver;
     char        *question;
@@ -98,50 +98,53 @@ typedef struct {
     MVMThreadContext *tc;
     int               work_idx;
     struct dns_query *query;
-    int               done;
 } QueryInfo;
 
-static void poll_query(struct dns_ctx *ctx, int timeout, void *data);
-static void process_query(uv_poll_t *handle, int status, int events);
-static void process_response(struct dns_ctx *ctx, void *result, void *data);
+/* Callbacks pertaining to performing asynchronous DNS queries themselves: */
+static void query_poll(struct dns_ctx *ctx, int timeout, void *data);
+static void query_process(uv_poll_t *handle, int status, int events);
+static void query_finish(struct dns_ctx *ctx, void *result, void *data);
 
-static void poll_query(struct dns_ctx *ctx, int timeout, void *data) {
-    if (data) {
+/* Callback set upon DNS resolution context's configuration to handle setting
+   any timeouts UDNS requests during a DNS query: */
+static void query_poll(struct dns_ctx *ctx, int timeout, void *data) {
+    if (!data);
+        /* UDNS wants us to clean up the timer and poll handle used if we
+           get here, but we reuse those between batches of DNS queries. */
+    else {
         uv_poll_t *handle = (uv_poll_t *)data;
         if (timeout >= 0)
-            uv_poll_start(handle, UV_WRITABLE, process_query);
+            uv_poll_start(handle, UV_READABLE | UV_WRITABLE, query_process);
         else
             uv_poll_stop(handle);
     }
 }
 
-static void process_query(uv_poll_t *handle, int status, int events) {
+/* Callback called after polling the DNS resolution context's socket to
+   handle reads and writes: */
+static void query_process(uv_poll_t *handle, int status, int events) {
     if (status);
-        /* TODO: Proper error handling. */
+        /* TODO: Error handling of some sort (maybe). */
     else {
         struct dns_ctx *ctx = (struct dns_ctx *)handle->data;
-        if (events & UV_WRITABLE) {
-            /* Typically, you would call dns_timeouts before poll(3). However,
-             * because this function handles sending data to a DNS server, call
-             * it during the I/O phase of the event loop instead and ignore
-             * the timeout it returns. */
+        if (events & UV_WRITABLE)
             (void)dns_timeouts(ctx, -1, 0);
-            uv_poll_start(handle, UV_READABLE, process_query);
-        }
         if (events & UV_READABLE)
             dns_ioevent(ctx, 0);
     }
 }
 
-static void process_response(struct dns_ctx *ctx, void *result, void *data) {
+/* Callback called after a DNS query has been completed to allow the RR to be
+   returned by the asyncdnsquery op: */
+static void query_finish(struct dns_ctx *ctx, void *result, void *data) {
     QueryInfo        *qi;
     MVMThreadContext *tc;
     MVMAsyncTask     *task;
 
-    qi       = (QueryInfo *)data;
-    qi->done = 1;
-    tc       = qi->tc;
-    task     = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
+    qi        = (QueryInfo *)data;
+    qi->query = NULL; /* ...so we don't attempt to cancel completed queries. */
+    tc        = qi->tc;
+    task      = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
     if (!result) {
         MVMROOT(tc, task, {
             MVMObject  *arr      = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
@@ -261,6 +264,13 @@ static void process_response(struct dns_ctx *ctx, void *result, void *data) {
     MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
 }
 
+/* Callbacks handling operations that can be performed with asynchronous DNS
+   queries on the I/O event loop: */
+static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data);
+static void query_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data);
+static void query_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist);
+static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *data);
+
 static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
     QueryInfo    *qi;
     MVMResolver  *resolver;
@@ -281,32 +291,33 @@ static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
     }
 
     /* Configure our DNS resolution context if need be: */
-    if (!MVM_load(&resolver->body.configured)) {
+    if (!resolver->body.configured) {
         int fd;
         int error;
 
         fd = dns_open(resolver->body.ctx);
-        if ((error = uv_poll_init(loop, resolver->body.handle, fd)))
-            /* XXX: Push to the queue idiot. */
+        if ((error = uv_poll_init_socket(loop, resolver->body.handle, fd)))
+            /* XXX: Push to the queue, idiot. */
             MVM_exception_throw_adhoc(tc,
                 "Failed to set up a DNS resolution context: %s",
                 uv_strerror(error));
         else {
-            resolver->body.handle->data = resolver->body.ctx;
-            dns_set_tmcbck(resolver->body.ctx, poll_query, resolver->body.handle);
-            MVM_incr(&resolver->body.configured);
+            dns_set_tmcbck(resolver->body.ctx, query_poll, resolver->body.handle);
+            resolver->body.configured = 1;
         }
     }
 
     /* Start the DNS query: */
     qi->tc       = tc;
     qi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
-    qi->query    = dns_submit_p(resolver->body.ctx, qi->question, qi->class, qi->type, 0, parser, process_response, qi);
+    qi->query    = dns_submit_p(resolver->body.ctx,
+        qi->question, qi->class, qi->type, 0,
+        parser, query_finish, qi);
 }
 
 static void query_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
     QueryInfo *qi = (QueryInfo *)data;
-    if (!qi->done) {
+    if (qi->query) {
         dns_cancel(qi->resolver->body.ctx, qi->query);
         MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
     }
@@ -321,7 +332,6 @@ static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *dat
     if (data) {
         QueryInfo *qi = (QueryInfo *)data;
         MVM_free(qi->question);
-        qi->query = NULL;
         MVM_free(qi);
     }
 }
@@ -334,13 +344,14 @@ static const MVMAsyncTaskOps query_op_table = {
     query_gc_free,
 };
 
+/* Operation for performing asynchronous DNS queries: */
 MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
         MVMObject *resolver, MVMString *question, MVMint64 class, MVMint64 type,
         MVMObject *queue, MVMObject *schedulee, MVMObject *async_type) {
     MVMAsyncTask *task;
     QueryInfo    *qi;
 
-    /* Validate REPRs. */
+    /* Validate the REPRs and DNS RR class and type arguments given: */
     if (REPR(resolver)->ID != MVM_REPR_ID_MVMResolver || !IS_CONCRETE(resolver))
         MVM_exception_throw_adhoc(tc,
             "asyncdnsquery resolver must be a concrete object with the Resolver REPR (got %s)",

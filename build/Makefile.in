@@ -511,6 +511,25 @@ UV_OBJECTS = @uvobjects@
 
 TOM_OBJECTS = @tomobjects@
 
+UDNS_WINDOWS = 3rdparty\udns\inet_XtoX@obj@ \
+               3rdparty\udns\udns_bl@obj@ \
+               3rdparty\udns\udns_codes@obj@ \
+               3rdparty\udns\udns_dn@obj@ \
+               3rdparty\udns\udns_dntosp@obj@ \
+               3rdparty\udns\udns_init@obj@ \
+               3rdparty\udns\udns_jran@obj@ \
+               3rdparty\udns\udns_misc@obj@ \
+               3rdparty\udns\udns_parse@obj@ \
+               3rdparty\udns\udns_resolver@obj@ \
+               3rdparty\udns\udns_rr_a@obj@ \
+               3rdparty\udns\udns_rr_mx@obj@ \
+               3rdparty\udns\udns_rr_mx@obj@ \
+               3rdparty\udns\udns_rr_naptr@obj@ \
+               3rdparty\udns\udns_rr_ptr@obj@ \
+               3rdparty\udns\udns_rr_srv@obj@ \
+               3rdparty\udns\udns_rr_txt@obj@ \
+               3rdparty\udns\udns_XtoX@obj@
+
 THIRDPARTY = @thirdpartylibs@
 
 MINILUA = 3rdparty/dynasm/minilua@exe@

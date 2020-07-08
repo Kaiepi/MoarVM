@@ -73,6 +73,7 @@ our %TP_UV = (
     # the OS needs to provide a C<src> or C<objects> setting
 );
 
+# Default rules for UDNS, which are good enough for most platforms.
 our %TP_UDNS = (
     name  => 'udns',
     path  => '3rdparty/udns',
@@ -270,13 +271,6 @@ TERM
 
         dcb => { %TP_DCB, name => 'libdyncallback_s' },
         dl  => { %TP_DL, name => 'libdynload_s' },
-
-        udns => {
-            name  => 'udns',
-            path  => '3rdparty/udns',
-            rule  => 'cd 3rdparty/udns && msbuild projects/msvs/udns.Win32/udns.vcxproj /p:configuration=release',
-            clean => 'cd 3rdparty/c-ares && $(RM) udns.lib',
-        },
     },
 );
 
@@ -442,8 +436,8 @@ our %COMPILERS = (
 
 our %OS_WIN32 = (
     exe      => '.exe',
-    defs     => [ qw( WIN32 AO_ASSUME_WINDOWS98 ) ],
-    syslibs  => [ qw( shell32 ws2_32 mswsock rpcrt4 advapi32 psapi iphlpapi userenv user32 ) ],
+    defs     => [ qw( WIN32 AO_ASSUME_WINDOWS98 UDNS_WINRT UNICODE _UNICODE ) ],
+    syslibs  => [ qw( shell32 ws2_32 mswsock rpcrt4 advapi32 psapi iphlpapi dhcpcsvc userenv user32 ) ],
     platform => '$(PLATFORM_WIN32)',
 
     dllimport => '__declspec(dllimport)',
@@ -459,6 +453,12 @@ our %OS_WIN32 = (
         uv => {
             %TP_UVDUMMY,
             src => [ qw( 3rdparty/libuv/src 3rdparty/libuv/src/win ) ],
+        },
+
+        udns => {
+            name    => 'udns',
+            path    => '3rdparty/udns',
+            objects => '$(UDNS_WINDOWS)',
         },
     },
 );

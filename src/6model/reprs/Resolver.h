@@ -12,7 +12,7 @@
 struct MVMResolverBody {
     struct dns_ctx *ctx;
     uv_poll_t      *handle;
-    AO_t            configured;
+    MVMint32        configured;
 };
 
 struct MVMResolver {

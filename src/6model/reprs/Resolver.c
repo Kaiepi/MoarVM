@@ -1,6 +1,5 @@
 #include "moar.h"
 
-
 /* This representation's function pointer table. */
 static const MVMREPROps Resolver_this_repr;
 
@@ -26,9 +25,10 @@ static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, voi
     if (MVM_cas(&call_dns_init, 1, 0))
         dns_init(NULL, 0);
 
-    body         = (MVMResolverBody *)data;
-    body->ctx    = dns_new(NULL);
-    body->handle = MVM_malloc(sizeof(uv_poll_t));
+    body               = (MVMResolverBody *)data;
+    body->ctx          = dns_new(NULL);
+    body->handle       = MVM_malloc(sizeof(uv_poll_t));
+    body->handle->data = body->ctx;
 }
 
 /* Copies to the body of one object to another. */
@@ -62,9 +62,10 @@ static void deserialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, vo
     if (MVM_cas(&call_dns_init, 1, 0))
         dns_init(NULL, 0);
 
-    body         = (MVMResolverBody *)data;
-    body->ctx    = dns_new(NULL);
-    body->handle = MVM_malloc(sizeof(uv_poll_t));
+    body               = (MVMResolverBody *)data;
+    body->ctx          = dns_new(NULL);
+    body->handle       = MVM_malloc(sizeof(uv_poll_t));
+    body->handle->data = body->ctx;
 }
 
 /* Sets the size of the STable. */
@@ -74,7 +75,7 @@ static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSeri
 
 /* Called by the VM in order to free memory associated with this object. */
 static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
-    MVMResolver *resolver = (MVMResolver *)resolver;
+    MVMResolver *resolver = (MVMResolver *)obj;
     dns_free(resolver->body.ctx);
     MVM_free(resolver->body.handle);
 }
