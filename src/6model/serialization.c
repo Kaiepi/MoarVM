@@ -326,21 +326,19 @@ static void expand_storage_if_needed(MVMThreadContext *tc, MVMSerializationWrite
     }
 }
 
-/* Writing function for null-terminated char array strings */
-void MVM_serialization_write_cstr(MVMThreadContext *tc, MVMSerializationWriter *writer, char *string) {
-    size_t len;
-    if (string)
-        len = strlen(string);
-    else
-        len = 0;
+/* Writing function for char array strings. */
+void MVM_serialization_write_cstr(MVMThreadContext *tc, MVMSerializationWriter *writer, const char *string, size_t len) {
+    MVM_serialization_write_int(tc, writer, len);
     if (len) {
-        MVM_serialization_write_int(tc, writer, len);
         expand_storage_if_needed(tc, writer, len);
         memcpy(*(writer->cur_write_buffer) + *(writer->cur_write_offset), string, len);
         *(writer->cur_write_offset) += len;
-    } else {
-        MVM_serialization_write_int(tc, writer, 0);
     }
+}
+
+/* Writing function for null-terminated char array strings. */
+void MVM_serialization_write_cstr_nt(MVMThreadContext *tc, MVMSerializationWriter *writer, const char *string) {
+    MVM_serialization_write_cstr(tc, writer, string, string && strlen(string));
 }
 
 /* Writing function for variable sized integers. Writes out a 64 bit value
@@ -1176,7 +1174,7 @@ static void serialize_stable(MVMThreadContext *tc, MVMSerializationWriter *write
             add_param_intern(tc, writer, st->WHAT, ptype, params);
     }
 
-    MVM_serialization_write_cstr(tc, writer, MVM_6model_get_stable_debug_name(tc, st));
+    MVM_serialization_write_cstr_nt(tc, writer, MVM_6model_get_stable_debug_name(tc, st));
     MVM_serialization_write_int(tc, writer, st->is_mixin_type);
 
     /* Store offset we save REPR data at. */
@@ -1728,23 +1726,35 @@ MVMString * MVM_serialization_read_str(MVMThreadContext *tc, MVMSerializationRea
     return read_string_from_heap(tc, reader, offset);
 }
 
-/* Reading function for null-terminated char array strings */
-char *MVM_serialization_read_cstr(MVMThreadContext *tc, MVMSerializationReader *reader) {
-    MVMint64 len = MVM_serialization_read_int(tc, reader);
-    char *strbuf = 0;
-    if (len > 0) {
-        const MVMuint8 *read_at = (MVMuint8 *) *(reader->cur_read_buffer) + *(reader->cur_read_offset);
-        assert_can_read(tc, reader, len);
-        strbuf = MVM_malloc(len + 1);
-        if (strbuf == 0)
-            fail_deserialize(tc, NULL, reader, "Cannot read a c string: malloc failed.");
-        memcpy(strbuf, read_at, len);
-        strbuf[len] = 0;
-        *(reader->cur_read_offset) += len;
-    } else if (len < 0) {
-        fail_deserialize(tc, NULL, reader, "Cannot read a c string with negative length %"PRIi64".", len);
+/* Reading function for char array strings. */
+char * MVM_serialization_read_cstr(MVMThreadContext *tc, MVMSerializationReader *reader, size_t *size) {
+    size_t  string_size = MVM_serialization_read_int(tc, reader);
+    char   *string      = NULL;
+    if (string_size) {
+        const MVMuint8 *read_at = (MVMuint8 *)*(reader->cur_read_buffer) + *(reader->cur_read_offset);
+        assert_can_read(tc, reader, string_size);
+        string = MVM_malloc(string_size);
+        memcpy(string, read_at, string_size);
+        *(reader->cur_read_offset) += string_size;
     }
-    return strbuf;
+    if (size)
+        *size = string_size;
+    return string;
+}
+
+/* Reading function for null-terminated char array strings. */
+char * MVM_serialization_read_cstr_nt(MVMThreadContext *tc, MVMSerializationReader *reader) {
+    size_t  len    = MVM_serialization_read_int(tc, reader);
+    char   *string = NULL;
+    if (len) {
+        const MVMuint8 *read_at = (MVMuint8 *)*(reader->cur_read_buffer) + *(reader->cur_read_offset);
+        assert_can_read(tc, reader, len);
+        string = MVM_malloc(len + 1);
+        memcpy(string, read_at, len);
+        string[len] = '\0';
+        *(reader->cur_read_offset) += len;
+    }
+    return string;
 }
 
 /* The SC id,idx pair is used in various ways, but common to them all is to
@@ -2735,7 +2745,7 @@ static void deserialize_stable(MVMThreadContext *tc, MVMSerializationReader *rea
     }
 
     if (reader->root.version >= 18) {
-        st->debug_name = MVM_serialization_read_cstr(tc, reader);
+        st->debug_name = MVM_serialization_read_cstr_nt(tc, reader);
     } else {
         st->debug_name = NULL;
     }

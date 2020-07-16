@@ -70,14 +70,14 @@ static const MVMStorageSpec * get_storage_spec(MVMThreadContext *tc, MVMSTable *
 static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerializationWriter *writer) {
     MVMNativeCallBody *body = (MVMNativeCallBody *)data;
     MVMint16 i = 0;
-    MVM_serialization_write_cstr(
+    MVM_serialization_write_cstr_nt(
         tc,
         writer,
         !MVM_is_null(tc, body->resolve_lib_name) && !MVM_is_null(tc, body->resolve_lib_name_arg)
             ? NULL
             : body->lib_name
     );
-    MVM_serialization_write_cstr(tc, writer, body->sym_name);
+    MVM_serialization_write_cstr_nt(tc, writer, body->sym_name);
     MVM_serialization_write_int(tc, writer, body->convention);
     MVM_serialization_write_int(tc, writer, body->num_args);
     MVM_serialization_write_int(tc, writer, body->ret_type);
@@ -99,8 +99,8 @@ static void deserialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, vo
     MVMNativeCallBody *body = (MVMNativeCallBody *)data;
     MVMint16 i = 0;
     if (reader->root.version >= 22) {
-        body->lib_name = MVM_serialization_read_cstr(tc, reader);
-        body->sym_name = MVM_serialization_read_cstr(tc, reader);
+        body->lib_name = MVM_serialization_read_cstr_nt(tc, reader);
+        body->sym_name = MVM_serialization_read_cstr_nt(tc, reader);
         body->convention = MVM_serialization_read_int(tc, reader);
         body->num_args = MVM_serialization_read_int(tc, reader);
         body->ret_type = MVM_serialization_read_int(tc, reader);
