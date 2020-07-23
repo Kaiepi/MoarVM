@@ -194,3 +194,26 @@ static const MVMREPROps MVMAddress_this_repr = {
     NULL, /* unmanaged_size */
     NULL, /* describe_refs */
 };
+
+MVMObject * MVM_address_from_ipv4_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port) {
+    char               *literal_cstr;
+    struct sockaddr_in  socket_address;
+    int                 error;
+
+    literal_cstr = MVM_string_utf8_encode_C_string(tc, literal);
+    error        = uv_ip4_addr(literal_cstr, port, &socket_address);
+    MVM_free(literal_cstr);
+
+    if (error)
+        MVM_exception_throw_adhoc(tc,
+            "Error creating an IPv4 address from a literal: %s",
+            uv_strerror(error));
+    else {
+        MVMAddress* address;
+        MVMROOT(tc, literal, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &socket_address, sizeof(struct sockaddr_in));
+        });
+        return (MVMObject *)address;
+    }
+}
