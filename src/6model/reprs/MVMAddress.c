@@ -240,3 +240,35 @@ MVMObject * MVM_address_from_ipv6_literal(MVMThreadContext *tc, MVMString *liter
         return (MVMObject *)address;
     }
 }
+
+MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
+#ifdef MVM_HAS_AF_UNIX
+    MVMuint64  path_len;
+    char      *path_cstr;
+
+    path_cstr = MVM_string_utf8_encode(tc, path, &path_len, 0);
+    if (path_len >= MVM_SOCKADDR_UN_PATH_SIZE) {
+        MVM_free(path_cstr);
+        MVM_exception_throw_adhoc(tc,
+            "UNIX socket address path is too long (max length supported by this platform is %zu characters)",
+            MVM_SOCKADDR_UN_PATH_SIZE - 1);
+    }
+    else {
+        struct sockaddr_un *socket_address;
+        MVMAddress         *address;
+
+        MVMROOT(tc, path, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+        });
+        MVM_address_set_storage_length(tc, &address->body.storage.any,
+            sizeof(*socket_address) - MVM_SOCKADDR_UN_PATH_SIZE + path_len);
+        socket_address             = &address->body.storage.un;
+        socket_address->sun_family = AF_UNIX;
+        memcpy(socket_address->sun_path, path_cstr, path_len * sizeof(char));
+        MVM_free(path_cstr);
+        return (MVMObject *)address;
+    }
+#else
+    MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#endif
+}

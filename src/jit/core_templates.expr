@@ -2683,6 +2683,12 @@
       (carg $1   ptr)
       (carg $2   int)) ptr_sz))
 
+(template: addrfromstr_un
+  (call (^func &MVM_address_from_path)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)) ptr_sz))
+
 (template: sp_resolvecode
   (call (^func &MVM_frame_resolve_invokee_spesh)
     (arglist
