@@ -69,6 +69,7 @@ MVM_STATIC_INLINE void MVM_address_set_storage_length(MVMThreadContext *tc, stru
 }
 
 MVMObject * MVM_address_from_ipv4_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port);
+MVMObject * MVM_address_from_ipv6_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port);
 
 #ifdef MVM_HAS_SOCKADDR_LEN
 #  undef MVM_HAS_SOCKADDR_LEN

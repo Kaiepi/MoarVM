@@ -5729,6 +5729,11 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64);
                 cur_op += 6;
                 goto NEXT;
+            OP(addrfromstr_ip6):
+                GET_REG(cur_op, 0).o = MVM_address_from_ipv6_literal(tc,
+                    GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64);
+                cur_op += 6;
+                goto NEXT;
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;

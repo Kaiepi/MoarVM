@@ -217,3 +217,26 @@ MVMObject * MVM_address_from_ipv4_literal(MVMThreadContext *tc, MVMString *liter
         return (MVMObject *)address;
     }
 }
+
+MVMObject * MVM_address_from_ipv6_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port) {
+    char                *literal_cstr;
+    struct sockaddr_in6  socket_address;
+    int                  error;
+
+    literal_cstr = MVM_string_utf8_encode_C_string(tc, literal);
+    error        = uv_ip6_addr(literal_cstr, port, &socket_address);
+    MVM_free(literal_cstr);
+
+    if (error)
+        MVM_exception_throw_adhoc(tc,
+            "Error creating an IPv6 address from a literal: %s",
+            uv_strerror(error));
+    else {
+        MVMAddress* address;
+        MVMROOT(tc, literal, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &socket_address, sizeof(socket_address));
+        });
+        return (MVMObject *)address;
+    }
+}
