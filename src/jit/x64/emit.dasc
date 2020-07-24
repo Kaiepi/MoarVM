@@ -2459,7 +2459,8 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         | mov WORK[target], TMP1;
         break;
     }
-    case MVM_OP_addrtostr: {
+    case MVM_OP_addrtostr:
+    case MVM_OP_addrport: {
         MVMint16 result = ins->operands[0].reg.orig;
         MVMint16 address = ins->operands[1].reg.orig;
         | mov ARG2, aword WORK[address];
@@ -2468,11 +2469,21 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         | test_type_object ARG2;
         | jz >2;
         |1:
-        | throw_adhoc "addrtostr requires a concrete MVMAddress";
+        if (op == MVM_OP_addrtostr) {
+            | throw_adhoc "addrtostr requires a concrete MVMAddress";
+        } else {
+            | throw_adhoc "addrport requires a concrete MVMAddress";
+        }
         |2:
         | mov ARG1, TC;
-        | callp &MVM_address_to_string;
-        | mov aword WORK[result], RV;
+        if (op == MVM_OP_addrtostr) {
+            | callp &MVM_address_to_string;
+            | mov aword WORK[result], RV;
+        } else {
+            | callp &MVM_address_get_port;
+            | movzx TMP2, ax;
+            | mov qword WORK[result], TMP2;
+        }
         break;
     }
     case MVM_OP_sp_fastbox_i:

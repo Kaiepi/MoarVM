@@ -195,6 +195,17 @@ static const MVMREPROps MVMAddress_this_repr = {
     NULL, /* describe_refs */
 };
 
+MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
+    switch (address->body.storage.any.sa_family) {
+        case AF_INET:
+            return ntohs(address->body.storage.ip4.sin_port);
+        case AF_INET6:
+            return ntohs(address->body.storage.ip6.sin6_port);
+        default:
+            MVM_exception_throw_adhoc(tc, "Can only get the port of an IP address");
+    }
+}
+
 MVMObject * MVM_address_from_ipv4_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port) {
     char               *literal_cstr;
     struct sockaddr_in  socket_address;
