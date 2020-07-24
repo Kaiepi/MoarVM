@@ -357,10 +357,59 @@ MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
 #endif
         default:
             MVM_exception_throw_adhoc(tc,
-                "Unknown native address family: %hhu",
+                "Unsupported native address family: %hhu",
                 address->body.storage.any.sa_family);
             break;
     }
 
     return address_str;
+}
+
+MVM_STATIC_INLINE void copy_network_address(MVMuint8 *dst, const MVMuint8 *src, size_t size, size_t elems) {
+#ifdef MVM_BIG_ENDIAN
+    memcpy(dst, src, size * elems);
+#else
+    size_t i, j;
+    for (i = elems; i--;)
+        for (j = size; j--;)
+            dst[i * size + j] = src[i * size + size - j - 1];
+#endif
+}
+
+MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *address_buf, MVMuint16 port) {
+    MVMArrayREPRData *repr_data = (MVMArrayREPRData *)STABLE(address_buf)->REPR_data;
+    switch (repr_data->slot_type) {
+        case MVM_ARRAY_U8:
+            if (address_buf->body.elems != 4)
+                MVM_exception_throw_adhoc(tc, "IPv4 address uint8 buffer must have 4 elements");
+            break;
+        case MVM_ARRAY_U16:
+            if (address_buf->body.elems != 2)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint16 buffer must have 2 elements");
+            break;
+        case MVM_ARRAY_U32:
+            if (address_buf->body.elems != 1)
+                MVM_exception_throw_adhoc(tc, "IPv4 address uint32 buffer must have 1 element");
+            break;
+        default:
+            MVM_exception_throw_adhoc(tc, "IPv4 address buffer must be an array of uint8, uint16, or uint32");
+            break;
+    }
+
+    {
+        struct sockaddr_in *socket_address;
+        MVMAddress         *address;
+
+        MVMROOT(tc, address_buf, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+        });
+        MVM_address_set_storage_length(tc, &address->body.storage.any, sizeof(socket_address));
+        socket_address             = &address->body.storage.ip4;
+        socket_address->sin_family = AF_INET;
+        socket_address->sin_port   = htons(port);
+        copy_network_address(
+            (MVMuint8 *)&socket_address->sin_addr.s_addr, address_buf->body.slots.u8,
+            repr_data->elem_size, address_buf->body.elems);
+        return (MVMObject *)address;
+    }
 }
