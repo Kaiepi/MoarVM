@@ -77,6 +77,8 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path);
 MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address);
 
 MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *address_buf, MVMuint16 port);
+MVMObject * MVM_address_from_ipv6_address(MVMThreadContext *tc,
+        MVMArray *address_buf, MVMuint16 port, MVMuint32 scope_id);
 
 #ifdef MVM_HAS_SOCKADDR_LEN
 #  undef MVM_HAS_SOCKADDR_LEN

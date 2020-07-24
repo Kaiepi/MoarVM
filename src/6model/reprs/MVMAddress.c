@@ -413,3 +413,47 @@ MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *addres
         return (MVMObject *)address;
     }
 }
+
+MVMObject * MVM_address_from_ipv6_address(MVMThreadContext *tc,
+        MVMArray *address_buf, MVMuint16 port, MVMuint32 scope_id) {
+    MVMArrayREPRData *repr_data = (MVMArrayREPRData *)STABLE(address_buf)->REPR_data;
+    switch (repr_data->slot_type) {
+        case MVM_ARRAY_U8:
+            if (address_buf->body.elems != 16)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint8 buffer must have 16 elements");
+            break;
+        case MVM_ARRAY_U16:
+            if (address_buf->body.elems != 8)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint16 buffer must have 8 elements");
+            break;
+        case MVM_ARRAY_U32:
+            if (address_buf->body.elems != 4)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint32 buffer must have 4 elements");
+            break;
+        case MVM_ARRAY_U64:
+            if (address_buf->body.elems != 2)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint64 buffer must have 2 elements");
+            break;
+        default:
+            MVM_exception_throw_adhoc(tc, "IPv4 address buffer must be an array of uint8, uint16, uint32, or uint64");
+            break;
+    }
+
+    {
+        struct sockaddr_in6 *socket_address;
+        MVMAddress          *address;
+
+        MVMROOT(tc, address_buf, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+        });
+        MVM_address_set_storage_length(tc, &address->body.storage.any, sizeof(socket_address));
+        socket_address                = &address->body.storage.ip6;
+        socket_address->sin6_family   = AF_INET6;
+        socket_address->sin6_port     = htons(port);
+        socket_address->sin6_scope_id = scope_id;
+        copy_network_address(
+            socket_address->sin6_addr.s6_addr, address_buf->body.slots.u8,
+            repr_data->elem_size, address_buf->body.elems);
+        return (MVMObject *)address;
+    }
+}

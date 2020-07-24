@@ -2514,6 +2514,30 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         | mov aword WORK[result], RV;
         break;
     }
+    case MVM_OP_addrfrombuf_ip6: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 address_buf = ins->operands[1].reg.orig;
+        MVMint16 port = ins->operands[2].reg.orig;
+        MVMint16 scope_id = ins->operands[3].reg.orig;
+        | mov ARG2, aword WORK[address_buf];
+        | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_VMArray;
+        | jne >1;
+        | test_type_object ARG2;
+        | jz >2;
+        |1:
+        | throw_adhoc "addrfrombuf_ip6 requires a concrete VMArray";
+        |2:
+        | mov ARG1, TC;
+        | xor TMP2, TMP2;
+        | mov TMP2w, word WORK[port];
+        | mov ARG2, TMP2;
+        | xor TMP3, TMP3;
+        | mov TMP3d, dword WORK[scope_id];
+        | mov ARG3, TMP3;
+        | callp &MVM_address_from_ipv6_address;
+        | mov aword WORK[result], RV;
+        break;
+    }
     case MVM_OP_sp_fastbox_i:
     case MVM_OP_sp_fastbox_i_ic:
     case MVM_OP_sp_fastbox_bi:
