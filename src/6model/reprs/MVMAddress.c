@@ -272,3 +272,76 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
     MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
 #endif
 }
+
+MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
+    MVMString *address_str;
+
+    switch (address->body.storage.any.sa_family) {
+        case AF_INET: {
+            char address_cstr[INET_ADDRSTRLEN];
+            int  error;
+
+            if ((error = uv_ip4_name(&address->body.storage.ip4, address_cstr, sizeof(address_cstr))))
+                MVM_exception_throw_adhoc(tc,
+                    "Error creating an IPv4 address literal: %s",
+                    strerror(errno));
+            else {
+                size_t address_cstr_len = strnlen(address_cstr, sizeof(address_cstr) - 1);
+                MVMROOT(tc, address, {
+                    address_str = MVM_string_utf8_decode(tc, tc->instance->VMString, address_cstr, address_cstr_len);
+                });
+            }
+            break;
+        }
+        case AF_INET6: {
+            char address_cstr[INET6_ADDRSTRLEN + 1 + UV_IF_NAMESIZE];
+            int  error;
+
+            if ((error = uv_ip6_name(&address->body.storage.ip6, address_cstr, INET6_ADDRSTRLEN)))
+                MVM_exception_throw_adhoc(tc,
+                    "Error creating an IPv6 address literal: %s",
+                    strerror(errno));
+            else {
+                size_t    address_len;
+                MVMuint32 address_scope_id;
+
+                address_len = strnlen(address_cstr, INET6_ADDRSTRLEN);
+                if ((address_scope_id = address->body.storage.ip6.sin6_scope_id)) {
+                    size_t presentation_len = address_len;
+                    size_t interface_len    = UV_IF_NAMESIZE;
+                    address_cstr[presentation_len] = '%';
+                    if ((error = uv_if_indextoiid(address_scope_id, address_cstr + presentation_len + 1, &interface_len)))
+                        MVM_exception_throw_adhoc(tc,
+                            "Error creating an IPv6 address literal: %s",
+                            uv_strerror(error));
+                    else
+                        address_len += 1 + interface_len;
+                }
+
+                MVMROOT(tc, address, {
+                    address_str = MVM_string_utf8_decode(tc, tc->instance->VMString, address_cstr, address_len);
+                });
+            }
+            break;
+        }
+#ifdef MVM_HAS_AF_UNIX
+        case AF_UNIX: {
+            MVMROOT(tc, address, {
+                const char *path_cstr = address->body.storage.un.sun_path;
+                size_t      path_len  = MVM_SOCKADDR_UN_PATH_SIZE -
+                                        sizeof(struct sockaddr_un) +
+                                        MVM_address_get_storage_length(tc, &address->body.storage.any);
+                address_str = MVM_string_utf8_c8_decode(tc, tc->instance->VMString, path_cstr, path_len);
+            });
+            break;
+        }
+#endif
+        default:
+            MVM_exception_throw_adhoc(tc,
+                "Unknown native address family: %hhu",
+                address->body.storage.any.sa_family);
+            break;
+    }
+
+    return address_str;
+}

@@ -5738,6 +5738,17 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 GET_REG(cur_op, 0).o = MVM_address_from_path(tc, GET_REG(cur_op, 2).s);
                 cur_op += 4;
                 goto NEXT;
+            OP(addrtostr): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID == MVM_REPR_ID_MVMAddress && IS_CONCRETE(address))
+                    GET_REG(cur_op, 0).s = MVM_address_to_string(tc, (MVMAddress *)address);
+                else
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtostr requires a concrete object with REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                cur_op += 4;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;
