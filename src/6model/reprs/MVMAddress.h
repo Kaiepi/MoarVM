@@ -69,6 +69,7 @@ MVM_STATIC_INLINE void MVM_address_set_storage_length(MVMThreadContext *tc, stru
 }
 
 MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address);
+MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address);
 
 MVMObject * MVM_address_from_ipv4_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port);
 MVMObject * MVM_address_from_ipv6_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port);

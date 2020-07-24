@@ -206,6 +206,14 @@ MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
     }
 }
 
+MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address) {
+    if (address->body.storage.any.sa_family == AF_INET6)
+        /* Scope IDs are not stored in network byte order. */
+        return address->body.storage.ip6.sin6_scope_id;
+    else
+        MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
+}
+
 MVMObject * MVM_address_from_ipv4_literal(MVMThreadContext *tc, MVMString *literal, MVMuint16 port) {
     char               *literal_cstr;
     struct sockaddr_in  socket_address;

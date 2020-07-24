@@ -1932,6 +1932,7 @@ start:
         /* Addresses */
     case MVM_OP_addrtostr:
     case MVM_OP_addrport:
+    case MVM_OP_addrscopeid:
         /* Specialized atomics */
     case MVM_OP_sp_cas_o:
     case MVM_OP_sp_atomicload_o:
