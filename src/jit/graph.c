@@ -1935,6 +1935,7 @@ start:
     case MVM_OP_addrscopeid:
     case MVM_OP_addrfrombuf_ip4:
     case MVM_OP_addrfrombuf_ip6:
+    case MVM_OP_addrfrombuf_un:
         /* Specialized atomics */
     case MVM_OP_sp_cas_o:
     case MVM_OP_sp_atomicload_o:
