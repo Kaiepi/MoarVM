@@ -485,3 +485,83 @@ MVMObject * MVM_address_from_unix_address(MVMThreadContext *tc, MVMArray *addres
     MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
 #endif
 }
+
+MVMObject * MVM_address_to_buf(MVMThreadContext *tc, MVMAddress *address, MVMArray *buf_type) {
+    MVMArrayREPRData *repr_data;
+    MVMArray         *buf;
+
+    repr_data = (MVMArrayREPRData *)STABLE(buf_type)->REPR_data;
+    switch (address->body.storage.any.sa_family) {
+        case AF_INET: {
+            switch (repr_data->slot_type) {
+                case MVM_ARRAY_U8:
+                case MVM_ARRAY_U16:
+                case MVM_ARRAY_U32: {
+                    MVMROOT2(tc, address, buf_type, {
+                        in_addr_t raw_address = address->body.storage.ip4.sin_addr.s_addr;
+                        buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
+                        buf->body.start    = 0;
+                        buf->body.slots.u8 = MVM_malloc(4);
+                        buf->body.ssize    = buf->body.elems = 4 / repr_data->elem_size;
+                        copy_network_address(
+                            buf->body.slots.u8, (const MVMuint8 *)&raw_address,
+                            repr_data->elem_size, buf->body.elems);
+                    });
+                    break;
+                }
+                default:
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtobuf buffer type must be an array of uint8, uint16, or uint32");
+            }
+            break;
+        }
+        case AF_INET6: {
+            switch (repr_data->slot_type) {
+                case MVM_ARRAY_U8:
+                case MVM_ARRAY_U16:
+                case MVM_ARRAY_U32:
+                case MVM_ARRAY_U64: {
+                    MVMROOT2(tc, address, buf_type, {
+                        const MVMuint8 *raw_address = address->body.storage.ip6.sin6_addr.s6_addr;
+                        buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
+                        buf->body.start    = 0;
+                        buf->body.slots.u8 = MVM_malloc(16);
+                        buf->body.ssize    = buf->body.elems = 16 / repr_data->elem_size;
+                        copy_network_address(
+                            buf->body.slots.u8, raw_address,
+                            repr_data->elem_size, buf->body.elems);
+                    });
+                    break;
+                }
+                default:
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtobuf buffer type must be an array of uint8, uint16, uint32, or uint64");
+            }
+            break;
+        }
+#ifdef MVM_HAS_AF_UNIX
+        case AF_UNIX: {
+            if (repr_data->slot_type == MVM_ARRAY_I8) {
+                MVMROOT2(tc, address, buf_type, {
+                    const char *raw_address      = address->body.storage.un.sun_path;
+                    size_t      raw_address_size = MVM_address_get_storage_length(tc, &address->body.storage.any) -
+                                                   sizeof(struct sockaddr_un) +
+                                                   MVM_SOCKADDR_UN_PATH_SIZE;
+                    buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
+                    buf->body.start    = 0;
+                    buf->body.slots.i8 = MVM_malloc(raw_address_size * sizeof(MVMint8));
+                    buf->body.ssize    = buf->body.elems = raw_address_size;
+                    memcpy(buf->body.slots.i8, raw_address, raw_address_size * sizeof(MVMint8));
+                });
+            }
+            else
+                MVM_exception_throw_adhoc(tc, "addrtobuf buffer type must be an array of int8");
+            break;
+        }
+#endif
+        default:
+            MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", address->body.storage.any.sa_family);
+    }
+
+    return (MVMObject *)buf;
+}

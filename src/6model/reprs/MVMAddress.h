@@ -80,6 +80,7 @@ MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *addres
 MVMObject * MVM_address_from_ipv6_address(MVMThreadContext *tc,
         MVMArray *address_buf, MVMuint16 port, MVMuint32 scope_id);
 MVMObject * MVM_address_from_unix_address(MVMThreadContext *tc, MVMArray *address_buf);
+MVMObject * MVM_address_to_buf(MVMThreadContext *tc, MVMAddress *address, MVMArray *buf_type);
 
 #ifdef MVM_HAS_SOCKADDR_LEN
 #  undef MVM_HAS_SOCKADDR_LEN
