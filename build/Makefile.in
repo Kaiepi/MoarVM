@@ -127,13 +127,14 @@ OBJECTS1 = src/core/callsite@obj@ \
           src/io/io@obj@ \
           src/io/eventloop@obj@ \
           src/io/syncfile@obj@ \
-          src/io/syncsocket@obj@ \
           src/io/fileops@obj@ \
           src/io/dirops@obj@ \
           src/io/procops@obj@ \
           src/io/timers@obj@ \
           src/io/filewatchers@obj@ \
           src/io/signals@obj@ \
+          src/io/dns@obj@ \
+          src/io/syncsocket@obj@ \
           src/io/asyncsocket@obj@ \
           src/io/asyncsocketudp@obj@ \
           src/6model/reprs@obj@ \
@@ -286,14 +287,15 @@ HEADERS = src/moar.h \
           src/io/io.h \
           src/io/eventloop.h \
           src/io/syncfile.h \
-		  src/io/socket.h \
-          src/io/syncsocket.h \
           src/io/fileops.h \
           src/io/dirops.h \
           src/io/procops.h \
           src/io/timers.h \
           src/io/filewatchers.h \
           src/io/signals.h \
+          src/io/socket.h \
+          src/io/dns.h \
+          src/io/syncsocket.h \
           src/io/asyncsocket.h \
           src/io/asyncsocketudp.h \
           src/gc/orchestrate.h \

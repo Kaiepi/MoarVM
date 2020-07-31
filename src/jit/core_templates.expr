@@ -2689,6 +2689,17 @@
       (carg (tc) ptr)
       (carg $1   ptr)) ptr_sz))
 
+(template: dnsresolve
+  (call (^func &MVM_io_dns_resolve)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)
+      (carg $2   int)
+      (carg $3   int)
+      (carg $4   int)
+      (carg $5   int)
+      (carg $6   int)) ptr_sz))
+
 (template: sp_resolvecode
   (call (^func &MVM_frame_resolve_invokee_spesh)
     (arglist

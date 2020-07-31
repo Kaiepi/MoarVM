@@ -895,6 +895,7 @@ addrfrombuf_ip4     w(obj) r(obj) r(int64) :pure
 addrfrombuf_ip6     w(obj) r(obj) r(int64) r(int64) :pure
 addrfrombuf_un      w(obj) r(obj) :pure
 addrtobuf           w(obj) r(obj) r(obj) :pure
+dnsresolve          w(obj) r(str) r(int64) r(int64) r(int64) r(int64) r(int64)
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.
