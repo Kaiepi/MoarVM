@@ -302,3 +302,6 @@ typedef struct MVMDebugServerData MVMDebugServerData;
 typedef struct MVMRunloopState MVMRunloopState;
 typedef struct MVMAddress MVMAddress;
 typedef struct MVMAddressBody MVMAddressBody;
+typedef struct MVMSocketFamily MVMSocketFamily;
+typedef struct MVMSocketType MVMSocketType;
+typedef struct MVMSocketProtocol MVMSocketProtocol;

@@ -286,6 +286,7 @@ HEADERS = src/moar.h \
           src/io/io.h \
           src/io/eventloop.h \
           src/io/syncfile.h \
+		  src/io/socket.h \
           src/io/syncsocket.h \
           src/io/fileops.h \
           src/io/dirops.h \

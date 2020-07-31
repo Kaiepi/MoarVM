@@ -197,6 +197,7 @@ MVM_PUBLIC MVMint32 MVM_jit_support(void);
 #include "io/io.h"
 #include "io/eventloop.h"
 #include "io/syncfile.h"
+#include "io/socket.h"
 #include "io/syncsocket.h"
 #include "io/fileops.h"
 #include "io/dirops.h"
