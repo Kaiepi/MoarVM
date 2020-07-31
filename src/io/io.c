@@ -11,6 +11,18 @@ static MVMOSHandle * verify_is_handle(MVMThreadContext *tc, MVMObject *oshandle,
     return (MVMOSHandle *)oshandle;
 }
 
+static MVMAddress * verify_is_address(MVMThreadContext *tc, MVMObject *maybe_address, const char *op) {
+    if (REPR(maybe_address)->ID != MVM_REPR_ID_MVMAddress)
+        MVM_exception_throw_adhoc(tc,
+            "%s requires an object with REPR MVMAddress (got %s with REPR %s)",
+            op, MVM_6model_get_debug_name(tc, maybe_address), REPR(maybe_address)->name);
+    if (!IS_CONCRETE(maybe_address))
+        MVM_exception_throw_adhoc(tc,
+            "%s requires a concrete MVMAddress, but got a type object",
+            op);
+    return (MVMAddress *)maybe_address;
+}
+
 static uv_mutex_t * acquire_mutex(MVMThreadContext *tc, MVMOSHandle *handle) {
     uv_mutex_t *mutex = handle->body.mutex;
     MVM_gc_mark_thread_blocked(tc);
@@ -215,18 +227,28 @@ MVMObject * MVM_io_write_bytes_async(MVMThreadContext *tc, MVMObject *oshandle, 
         MVM_exception_throw_adhoc(tc, "Cannot write bytes asynchronously to this kind of handle");
 }
 
-MVMObject * MVM_io_write_bytes_to_async(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *queue,
-                                        MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type,
-                                        MVMString *host, MVMint64 port) {
-    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "write buffer asynchronously to destination");
+MVMObject * MVM_io_write_bytes_to_async(MVMThreadContext *tc,
+        MVMObject *oshandle, MVMObject *queue, MVMObject *schedulee,
+        MVMObject *maybe_address, MVMObject *buffer,
+        MVMObject *async_type) {
+    MVMOSHandle *handle;
+    MVMAddress  *address;
+
+    handle = verify_is_handle(tc, oshandle, "write buffer asynchronously to destination");
+    if (MVM_is_null(tc, maybe_address)) {
+        address = (MVMAddress *)tc->instance->boot_types.BOOTAddress;
+    } else {
+        address = verify_is_address(tc, maybe_address, "write buffer asynchronously to destination");
+    }
+
     if (buffer == NULL)
         MVM_exception_throw_adhoc(tc, "Failed to write to filehandle: NULL buffer given");
     if (handle->body.ops->async_writable_to) {
         MVMObject *result;
-        MVMROOT6(tc, host, queue, schedulee, buffer, async_type, handle, {
+        MVMROOT6(tc, handle, queue, schedulee, address, buffer, async_type, {
             uv_mutex_t *mutex = acquire_mutex(tc, handle);
             result = (MVMObject *)handle->body.ops->async_writable_to->write_bytes_to(tc,
-                handle, queue, schedulee, buffer, async_type, host, port);
+                handle, queue, schedulee, address, buffer, async_type);
             release_mutex(tc, mutex);
         });
         return result;
@@ -304,12 +326,15 @@ void MVM_io_truncate(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 offset)
         MVM_exception_throw_adhoc(tc, "Cannot truncate this kind of handle");
 }
 
-void MVM_io_connect(MVMThreadContext *tc, MVMObject *oshandle, MVMString *host, MVMint64 port, MVMuint16 family) {
-    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "connect");
+void MVM_io_connect(MVMThreadContext *tc,
+        MVMObject *oshandle, MVMObject *maybe_address,
+        MVMint64 family, MVMint64 type, MVMint64 protocol) {
+    MVMOSHandle *handle  = verify_is_handle(tc, oshandle, "connect");
+    MVMAddress  *address = verify_is_address(tc, maybe_address, "connect");
     if (handle->body.ops->sockety) {
-        MVMROOT2(tc, host, handle, {
+        MVMROOT2(tc, handle, address, {
             uv_mutex_t *mutex = acquire_mutex(tc, handle);
-            handle->body.ops->sockety->connect(tc, handle, host, port, family);
+            handle->body.ops->sockety->connect(tc, handle, address, family, type, protocol);
             release_mutex(tc, mutex);
         });
     }
@@ -317,12 +342,16 @@ void MVM_io_connect(MVMThreadContext *tc, MVMObject *oshandle, MVMString *host, 
         MVM_exception_throw_adhoc(tc, "Cannot connect this kind of handle");
 }
 
-void MVM_io_bind(MVMThreadContext *tc, MVMObject *oshandle, MVMString *host, MVMint64 port, MVMuint16 family, MVMint32 backlog) {
-    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "bind");
+void MVM_io_bind(MVMThreadContext *tc,
+        MVMObject *oshandle, MVMObject *maybe_address,
+        MVMint64 family, MVMint64 type, MVMint64 protocol,
+        MVMint32 backlog) {
+    MVMOSHandle *handle  = verify_is_handle(tc, oshandle, "bind");
+    MVMAddress  *address = verify_is_address(tc, maybe_address, "bind");
     if (handle->body.ops->sockety) {
-        MVMROOT2(tc, host, handle, {
+        MVMROOT2(tc, handle, address, {
             uv_mutex_t *mutex = acquire_mutex(tc, handle);
-            handle->body.ops->sockety->bind(tc, handle, host, port, family, backlog);
+            handle->body.ops->sockety->bind(tc, handle, address, family, type, protocol, backlog);
             release_mutex(tc, mutex);
         });
     }

@@ -514,11 +514,12 @@ static void push_name_and_port(MVMThreadContext *tc, struct sockaddr_storage *na
 
 /* Info we convey about a connection attempt task. */
 typedef struct {
-    struct sockaddr  *dest;
-    uv_tcp_t         *socket;
-    uv_connect_t     *connect;
-    MVMThreadContext *tc;
-    int               work_idx;
+    const MVMSocketFamily *family;
+    MVMAddress            *address;
+    uv_tcp_t              *socket;
+    uv_connect_t          *connect;
+    MVMThreadContext      *tc;
+    int                    work_idx;
 } ConnectInfo;
 
 /* When a connection takes place, need to send result. */
@@ -582,8 +583,8 @@ static void connect_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *asyn
     ci->socket        = MVM_malloc(sizeof(uv_tcp_t));
     ci->connect       = MVM_malloc(sizeof(uv_connect_t));
     ci->connect->data = data;
-    if ((r = uv_tcp_init(loop, ci->socket)) < 0 ||
-        (r = uv_tcp_connect(ci->connect, ci->socket, ci->dest, on_connect)) < 0) {
+    if ((r = uv_tcp_init_ex(loop, ci->socket, (unsigned int)ci->family->native)) < 0 ||
+        (r = uv_tcp_connect(ci->connect, ci->socket, &ci->address->body.storage.any, on_connect)) < 0) {
         /* Error; need to notify. */
         MVMROOT(tc, async_task, {
             MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
@@ -611,14 +612,16 @@ static void connect_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *asyn
     }
 }
 
+/* Marks objects for a connection task. */
+static void connect_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
+    ConnectInfo *ci = (ConnectInfo *)data;
+    MVM_gc_worklist_add(tc, worklist, &ci->address);
+}
+
 /* Frees info for a connection task. */
 static void connect_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
-    if (data) {
-        ConnectInfo *ci = (ConnectInfo *)data;
-        if (ci->dest)
-            MVM_free(ci->dest);
-        MVM_free(ci);
-    }
+    if (data)
+        MVM_free(data);
 }
 
 /* Operations table for async connect task. */
@@ -626,30 +629,28 @@ static const MVMAsyncTaskOps connect_op_table = {
     connect_setup,
     NULL,
     NULL,
-    NULL,
+    connect_gc_mark,
     connect_gc_free
 };
 
 /* Sets off an asynchronous socket connection. */
-MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc, MVMObject *queue,
-                                        MVMObject *schedulee, MVMString *host,
-                                        MVMint64 port, MVMObject *async_type) {
+MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc,
+        MVMObject *queue, MVMObject *schedulee,
+        MVMObject *address, MVMint64 family_value,
+        MVMObject *async_type) {
     MVMAsyncTask *task;
     ConnectInfo  *ci;
-    struct sockaddr *dest;
 
     /* Validate REPRs. */
     if (REPR(queue)->ID != MVM_REPR_ID_ConcBlockingQueue)
         MVM_exception_throw_adhoc(tc,
             "asyncconnect target queue must have ConcBlockingQueue REPR");
+    if (REPR(address)->ID != MVM_REPR_ID_MVMAddress || !IS_CONCRETE(address))
+        MVM_exception_throw_adhoc(tc,
+            "asyncconnect address must be an object with the MVMAddress REPR");
     if (REPR(async_type)->ID != MVM_REPR_ID_MVMAsyncTask)
         MVM_exception_throw_adhoc(tc,
             "asyncconnect result type must have REPR AsyncTask");
-
-    /* Resolve hostname. (Could be done asynchronously too.) */
-    MVMROOT3(tc, queue, schedulee, async_type, {
-        dest = MVM_io_resolve_host_name(tc, host, port, MVM_SOCKET_FAMILY_UNSPEC, MVM_SOCKET_TYPE_STREAM, MVM_SOCKET_PROTOCOL_ANY, 0);
-    });
 
     /* Create async task handle. */
     MVMROOT2(tc, queue, schedulee, {
@@ -659,7 +660,8 @@ MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc, MVMObject *queue,
     MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
     task->body.ops  = &connect_op_table;
     ci              = MVM_calloc(1, sizeof(ConnectInfo));
-    ci->dest        = dest;
+    ci->family      = MVM_io_socket_runtime_family(tc, family_value);
+    MVM_ASSIGN_REF(tc, &(task->common.header), ci->address, address);
     task->body.data = ci;
 
     /* Hand the task off to the event loop. */
@@ -672,13 +674,13 @@ MVMObject * MVM_io_socket_connect_async(MVMThreadContext *tc, MVMObject *queue,
 
 /* Info we convey about a socket listen task. */
 typedef struct {
-    struct sockaddr  *dest;
-    uv_tcp_t         *socket;
-    MVMThreadContext *tc;
-    int               work_idx;
-    int               backlog;
+    const MVMSocketFamily *family;
+    MVMAddress            *address;
+    uv_tcp_t              *socket;
+    MVMThreadContext      *tc;
+    int                    work_idx;
+    int                    backlog;
 } ListenInfo;
-
 
 /* Handles an incoming connection. */
 static void on_connection(uv_stream_t *server, int status) {
@@ -758,8 +760,8 @@ static void listen_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async
     /* Create and initialize socket and connection, and start listening. */
     li->socket        = MVM_malloc(sizeof(uv_tcp_t));
     li->socket->data  = data;
-    if ((r = uv_tcp_init(loop, li->socket)) < 0 ||
-        (r = uv_tcp_bind(li->socket, li->dest, 0)) < 0 ||
+    if ((r = uv_tcp_init_ex(loop, li->socket, (unsigned int)li->family->native)) < 0 ||
+        (r = uv_tcp_bind(li->socket, &li->address->body.storage.any, 0)) < 0 ||
         (r = uv_listen((uv_stream_t *)li->socket, li->backlog, on_connection))) {
         /* Error; need to notify. */
         MVMROOT(tc, async_task, {
@@ -834,14 +836,16 @@ static void listen_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *asyn
     }
 }
 
+/* Marks objects for a listen task. */
+static void listen_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
+    ListenInfo *li = (ListenInfo *)data;
+    MVM_gc_worklist_add(tc, worklist, &li->address);
+}
+
 /* Frees info for a listen task. */
 static void listen_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
-    if (data) {
-        ListenInfo *li = (ListenInfo *)data;
-        if (li->dest)
-            MVM_free(li->dest);
-        MVM_free(li);
-    }
+    if (data)
+        MVM_free(data);
 }
 
 /* Operations table for async listen task. */
@@ -849,30 +853,28 @@ static const MVMAsyncTaskOps listen_op_table = {
     listen_setup,
     NULL,
     listen_cancel,
-    NULL,
+    listen_gc_mark,
     listen_gc_free
 };
 
 /* Initiates an async socket listener. */
-MVMObject * MVM_io_socket_listen_async(MVMThreadContext *tc, MVMObject *queue,
-                                       MVMObject *schedulee, MVMString *host,
-                                       MVMint64 port, MVMint32 backlog, MVMObject *async_type) {
+MVMObject * MVM_io_socket_listen_async(MVMThreadContext *tc,
+        MVMObject *queue, MVMObject *schedulee,
+        MVMObject *address, MVMint64 family_value, MVMint32 backlog,
+        MVMObject *async_type) {
     MVMAsyncTask *task;
     ListenInfo   *li;
-    struct sockaddr *dest;
 
     /* Validate REPRs. */
     if (REPR(queue)->ID != MVM_REPR_ID_ConcBlockingQueue)
         MVM_exception_throw_adhoc(tc,
             "asynclisten target queue must have ConcBlockingQueue REPR");
+    if (REPR(address)->ID != MVM_REPR_ID_MVMAddress || !IS_CONCRETE(address))
+        MVM_exception_throw_adhoc(tc,
+            "asynclisten address must be an object with the MVMAddress REPR");
     if (REPR(async_type)->ID != MVM_REPR_ID_MVMAsyncTask)
         MVM_exception_throw_adhoc(tc,
             "asynclisten result type must have REPR AsyncTask");
-
-    /* Resolve hostname. (Could be done asynchronously too.) */
-    MVMROOT3(tc, queue, schedulee, async_type, {
-        dest = MVM_io_resolve_host_name(tc, host, port, MVM_SOCKET_FAMILY_UNSPEC, MVM_SOCKET_TYPE_STREAM, MVM_SOCKET_PROTOCOL_ANY, 1);
-    });
 
     /* Create async task handle. */
     MVMROOT2(tc, queue, schedulee, {
@@ -882,7 +884,8 @@ MVMObject * MVM_io_socket_listen_async(MVMThreadContext *tc, MVMObject *queue,
     MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
     task->body.ops  = &listen_op_table;
     li              = MVM_calloc(1, sizeof(ListenInfo));
-    li->dest        = dest;
+    li->family      = MVM_io_socket_runtime_family(tc, family_value);
+    MVM_ASSIGN_REF(tc, &(task->common.header), li->address, address);
     li->backlog     = backlog;
     task->body.data = li;
 

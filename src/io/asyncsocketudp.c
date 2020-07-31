@@ -249,12 +249,12 @@ static MVMAsyncTask * read_bytes(MVMThreadContext *tc, MVMOSHandle *h, MVMObject
 /* Info we convey about a write task. */
 typedef struct {
     MVMOSHandle      *handle;
+    MVMAddress       *address;
     MVMObject        *buf_data;
     uv_udp_send_t    *req;
     uv_buf_t          buf;
     MVMThreadContext *tc;
     int               work_idx;
-    struct sockaddr  *dest_addr;
 } WriteInfo;
 
 /* Completion handler for an asynchronous write. */
@@ -316,7 +316,7 @@ static void write_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
         MVM_exception_throw_adhoc(tc, "cannot write to a closed socket");
     }
 
-    if ((r = uv_udp_send(wi->req, handle_data->handle, &(wi->buf), 1, wi->dest_addr, on_write)) < 0) {
+    if ((r = uv_udp_send(wi->req, handle_data->handle, &(wi->buf), 1, &wi->address->body.storage.any, on_write)) < 0) {
         /* Error; need to notify. */
         MVMROOT(tc, async_task, {
             MVMObject    *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
@@ -342,17 +342,14 @@ static void write_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
 static void write_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
     WriteInfo *wi = (WriteInfo *)data;
     MVM_gc_worklist_add(tc, worklist, &wi->handle);
+    MVM_gc_worklist_add(tc, worklist, &wi->address);
     MVM_gc_worklist_add(tc, worklist, &wi->buf_data);
 }
 
 /* Frees info for a write task. */
 static void write_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
-    if (data) {
-        WriteInfo *wi = (WriteInfo *)data;
-        if (wi->dest_addr)
-            MVM_free(wi->dest_addr);
+    if (data)
         MVM_free(data);
-    }
 }
 
 /* Operations table for async write task. */
@@ -364,40 +361,40 @@ static const MVMAsyncTaskOps write_op_table = {
     write_gc_free
 };
 
-static MVMAsyncTask * write_bytes_to(MVMThreadContext *tc, MVMOSHandle *h, MVMObject *queue,
-                                     MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type,
-                                     MVMString *host, MVMint64 port) {
-    MVMAsyncTask    *task;
-    WriteInfo       *wi;
-    struct sockaddr *dest_addr;
+static MVMAsyncTask * write_bytes_to(MVMThreadContext *tc,
+        MVMOSHandle *h, MVMObject *queue, MVMObject *schedulee,
+        MVMAddress *address, MVMObject *buffer,
+        MVMObject *async_type) {
+    MVMAsyncTask *task;
+    WriteInfo    *wi;
 
     /* Validate REPRs. */
     if (REPR(queue)->ID != MVM_REPR_ID_ConcBlockingQueue)
         MVM_exception_throw_adhoc(tc,
             "asyncwritebytesto target queue must have ConcBlockingQueue REPR");
-    if (REPR(async_type)->ID != MVM_REPR_ID_MVMAsyncTask)
+    if (!IS_CONCRETE(address) || REPR(address)->ID != MVM_REPR_ID_MVMAddress)
         MVM_exception_throw_adhoc(tc,
-            "asyncwritebytesto result type must have REPR AsyncTask");
+            "asyncwritebytesto address must be an object with the MVMAddress REPR");
     if (!IS_CONCRETE(buffer) || REPR(buffer)->ID != MVM_REPR_ID_VMArray)
         MVM_exception_throw_adhoc(tc, "asyncwritebytesto requires a native array to read from");
     if (((MVMArrayREPRData *)STABLE(buffer)->REPR_data)->slot_type != MVM_ARRAY_U8
         && ((MVMArrayREPRData *)STABLE(buffer)->REPR_data)->slot_type != MVM_ARRAY_I8)
         MVM_exception_throw_adhoc(tc, "asyncwritebytesto requires a native array of uint8 or int8");
+    if (REPR(async_type)->ID != MVM_REPR_ID_MVMAsyncTask)
+        MVM_exception_throw_adhoc(tc,
+            "asyncwritebytesto result type must have REPR AsyncTask");
 
     /* Resolve destination and create async task handle. */
     MVMROOT4(tc, queue, schedulee, h, buffer, {
-        MVMROOT(tc, async_type, {
-            dest_addr = MVM_io_resolve_host_name(tc, host, port, MVM_SOCKET_FAMILY_UNSPEC, MVM_SOCKET_TYPE_DGRAM, MVM_SOCKET_PROTOCOL_ANY, 0);
-        });
         task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_type);
     });
     MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
     MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
     task->body.ops  = &write_op_table;
     wi              = MVM_calloc(1, sizeof(WriteInfo));
+    MVM_ASSIGN_REF(tc, &(task->common.header), wi->address, address);
     MVM_ASSIGN_REF(tc, &(task->common.header), wi->handle, h);
     MVM_ASSIGN_REF(tc, &(task->common.header), wi->buf_data, buffer);
-    wi->dest_addr = dest_addr;
     task->body.data = wi;
 
     /* Hand the task off to the event loop. */
@@ -484,8 +481,9 @@ static const MVMIOOps op_table = {
 
 /* Info we convey about a socket setup task. */
 typedef struct {
-    struct sockaddr  *bind_addr;
-    MVMint64          flags;
+    const MVMSocketFamily *family;
+    MVMAddress            *address;
+    MVMint64               flags;
 } SocketSetupInfo;
 
 /* Initilalize the UDP socket on the event loop. */
@@ -494,9 +492,9 @@ static void setup_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
     SocketSetupInfo *ssi = (SocketSetupInfo *)data;
     uv_udp_t *udp_handle = MVM_malloc(sizeof(uv_udp_t));
     int r;
-    if ((r = uv_udp_init(loop, udp_handle)) >= 0) {
-        if (ssi->bind_addr)
-            r = uv_udp_bind(udp_handle, ssi->bind_addr, 0);
+    if ((r = uv_udp_init_ex(loop, udp_handle, (unsigned int)ssi->family->native)) >= 0) {
+        if (ssi->address)
+            r = uv_udp_bind(udp_handle, &ssi->address->body.storage.any, 0);
         if (r >= 0 && (ssi->flags & 1))
             r = uv_udp_set_broadcast(udp_handle, 1);
     }
@@ -540,48 +538,47 @@ static void setup_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
     }
 }
 
-/* Frees info for a connection task. */
-static void setup_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
-    if (data) {
-        SocketSetupInfo *ssi = (SocketSetupInfo *)data;
-        if (ssi->bind_addr)
-            MVM_free(ssi->bind_addr);
-        MVM_free(ssi);
-    }
+/* Marks objects for an async UDP socket task. */
+static void setup_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
+    SocketSetupInfo *ssi = (SocketSetupInfo *)data;
+    MVM_gc_worklist_add(tc, worklist, &ssi->address);
 }
 
-/* Operations table for async connect task. */
+/* Frees info for an async UDP socket task. */
+static void setup_gc_free(MVMThreadContext *tc, MVMObject *t, void *data) {
+    if (data)
+        MVM_free(data);
+}
+
+/* Operations table for async UDP socket task. */
 static const MVMAsyncTaskOps setup_op_table = {
     setup_setup,
     NULL,
     NULL,
-    NULL,
+    setup_gc_mark,
     setup_gc_free
 };
 
 /* Creates a UDP socket and binds it to the specified host/port. */
-MVMObject * MVM_io_socket_udp_async(MVMThreadContext *tc, MVMObject *queue,
-                                    MVMObject *schedulee, MVMString *host,
-                                    MVMint64 port, MVMint64 flags,
-                                    MVMObject *async_type) {
+MVMObject * MVM_io_socket_udp_async(MVMThreadContext *tc,
+        MVMObject *queue, MVMObject *schedulee,
+        MVMObject *address, MVMint64 family_value, MVMint64 flags,
+        MVMObject *async_type) {
+    MVMint64         has_address;
     MVMAsyncTask    *task;
     SocketSetupInfo *ssi;
-    struct sockaddr *bind_addr = NULL;
 
     /* Validate REPRs. */
+    has_address = !MVM_is_null(tc, address);
     if (REPR(queue)->ID != MVM_REPR_ID_ConcBlockingQueue)
         MVM_exception_throw_adhoc(tc,
             "asyncudp target queue must have ConcBlockingQueue REPR");
+    if (has_address && (REPR(address)->ID != MVM_REPR_ID_MVMAddress || !IS_CONCRETE(address)))
+        MVM_exception_throw_adhoc(tc,
+            "asyncudp address must be an object with the MVMAddress REPR");
     if (REPR(async_type)->ID != MVM_REPR_ID_MVMAsyncTask)
         MVM_exception_throw_adhoc(tc,
             "asyncudp result type must have REPR AsyncTask");
-
-    /* Resolve hostname. (Could be done asynchronously too.) */
-    if (host && IS_CONCRETE(host)) {
-        MVMROOT3(tc, queue, schedulee, async_type, {
-            bind_addr = MVM_io_resolve_host_name(tc, host, port, MVM_SOCKET_FAMILY_UNSPEC, MVM_SOCKET_TYPE_DGRAM, MVM_SOCKET_PROTOCOL_ANY, 1);
-        });
-    }
 
     /* Create async task handle. */
     MVMROOT2(tc, queue, schedulee, {
@@ -591,7 +588,9 @@ MVMObject * MVM_io_socket_udp_async(MVMThreadContext *tc, MVMObject *queue,
     MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
     task->body.ops  = &setup_op_table;
     ssi             = MVM_calloc(1, sizeof(SocketSetupInfo));
-    ssi->bind_addr  = bind_addr;
+    ssi->family     = MVM_io_socket_runtime_family(tc, family_value);
+    if (has_address)
+        MVM_ASSIGN_REF(tc, &(task->common.header), ssi->address, address);
     ssi->flags      = flags;
     task->body.data = ssi;
 
