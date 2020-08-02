@@ -2702,6 +2702,18 @@
       (carg $5   int)
       (carg $6   int)) ptr_sz))
 
+(template: getsockname
+  (call (^func &MVM_io_getsockname)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)) ptr_sz))
+
+(template: getpeername
+  (call (^func &MVM_io_getpeername)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1   ptr)) ptr_sz))
+
 (template: sp_resolvecode
   (call (^func &MVM_frame_resolve_invokee_spesh)
     (arglist

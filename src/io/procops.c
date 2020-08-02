@@ -452,6 +452,7 @@ static const MVMIOOps proc_op_table = {
     NULL,
     NULL,
     NULL,
+    NULL,
     get_async_task_handle,
     NULL,
     NULL,

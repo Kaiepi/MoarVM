@@ -240,6 +240,7 @@ typedef struct MVMIOAsyncWritable MVMIOAsyncWritable;
 typedef struct MVMIOAsyncWritableTo MVMIOAsyncWritableTo;
 typedef struct MVMIOSeekable MVMIOSeekable;
 typedef struct MVMIOSockety MVMIOSockety;
+typedef struct MVMIOAddressable MVMIOAddressable;
 typedef struct MVMIOIntrospection MVMIOIntrospection;
 typedef struct MVMIOLockable MVMIOLockable;
 typedef struct MVMDecodeStream MVMDecodeStream;

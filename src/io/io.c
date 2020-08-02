@@ -389,6 +389,32 @@ MVMObject * MVM_io_accept(MVMThreadContext *tc, MVMObject *oshandle) {
         MVM_exception_throw_adhoc(tc, "Cannot accept this kind of handle");
 }
 
+MVMObject * MVM_io_getsockname(MVMThreadContext *tc, MVMObject *oshandle) {
+    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "getsockname");
+    if (handle->body.ops->addressable) {
+        MVMObject *result;
+        MVMROOT(tc, handle, {
+            result = handle->body.ops->addressable->getsockname(tc, handle);
+        });
+        return result;
+    }
+    else
+        MVM_exception_throw_adhoc(tc, "Cannot getsockname with this type of handle");
+}
+
+MVMObject * MVM_io_getpeername(MVMThreadContext *tc, MVMObject *oshandle) {
+    MVMOSHandle *handle = verify_is_handle(tc, oshandle, "getpeername");
+    if (handle->body.ops->addressable) {
+        MVMObject *result;
+        MVMROOT(tc, handle, {
+            result = handle->body.ops->addressable->getpeername(tc, handle);
+        });
+        return result;
+    }
+    else
+        MVM_exception_throw_adhoc(tc, "Cannot getpeername with this type of handle");
+}
+
 void MVM_io_set_buffer_size(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 size) {
     MVMOSHandle *handle = verify_is_handle(tc, oshandle, "set buffer size");
     if (handle->body.ops->set_buffer_size) {

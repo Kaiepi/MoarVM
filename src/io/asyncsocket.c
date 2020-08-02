@@ -436,6 +436,64 @@ static MVMint64 close_socket(MVMThreadContext *tc, MVMOSHandle *h) {
     return 0;
 }
 
+static MVMObject * socket_getsockname(MVMThreadContext *tc, MVMOSHandle *h) {
+    const MVMIOAsyncSocketData *data;
+    struct sockaddr_storage     address_storage;
+    socklen_t                   address_len;
+    int                         error;
+
+    data        = (const MVMIOAsyncSocketData *)h->body.data;
+    address_len = sizeof(address_storage);
+    if ((error = uv_tcp_getsockname((uv_tcp_t *)data->handle, (struct sockaddr *)&address_storage, &address_len)))
+        MVM_exception_throw_adhoc(tc,
+            "Error getting a local socket address: %s",
+            uv_strerror(error));
+    else {
+        MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVMROOT(tc, arr, {
+            MVMAddress *address;
+
+            MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc,
+                tc->instance->boot_types.BOOTInt,
+                MVM_io_socket_native_family(tc, address_storage.ss_family)->runtime));
+
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &address_storage, address_len);
+            MVM_repr_push_o(tc, arr, (MVMObject *)address);
+        });
+        return arr;
+    }
+}
+
+static MVMObject * socket_getpeername(MVMThreadContext *tc, MVMOSHandle *h) {
+    const MVMIOAsyncSocketData *data;
+    struct sockaddr_storage     address_storage;
+    socklen_t                   address_len;
+    int                         error;
+
+    data        = (const MVMIOAsyncSocketData *)h->body.data;
+    address_len = sizeof(address_storage);
+    if ((error = uv_tcp_getpeername((uv_tcp_t *)data->handle, (struct sockaddr *)&address_storage, &address_len)))
+        MVM_exception_throw_adhoc(tc,
+            "Error getting a remote socket address: %s",
+            uv_strerror(error));
+    else {
+        MVMObject *arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVMROOT(tc, arr, {
+            MVMAddress *address;
+
+            MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc,
+                tc->instance->boot_types.BOOTInt,
+                MVM_io_socket_native_family(tc, address_storage.ss_family)->runtime));
+
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+            memcpy(&address->body.storage, &address_storage, address_len);
+            MVM_repr_push_o(tc, arr, (MVMObject *)address);
+        });
+        return arr;
+    }
+}
+
 static MVMint64 socket_is_tty(MVMThreadContext *tc, MVMOSHandle *h) {
     MVMIOAsyncSocketData *data   = (MVMIOAsyncSocketData *)h->body.data;
     uv_handle_t          *handle = (uv_handle_t *)data->handle;
@@ -457,6 +515,8 @@ static MVMint64 socket_handle(MVMThreadContext *tc, MVMOSHandle *h) {
 static const MVMIOClosable      closable       = { close_socket };
 static const MVMIOAsyncReadable async_readable = { read_bytes };
 static const MVMIOAsyncWritable async_writable = { write_bytes };
+static const MVMIOAddressable   addressable    = { socket_getsockname,
+                                                   socket_getpeername };
 static const MVMIOIntrospection introspection  = { socket_is_tty,
                                                    socket_handle };
 static const MVMIOOps op_table = {
@@ -468,6 +528,7 @@ static const MVMIOOps op_table = {
     NULL,
     NULL,
     NULL,
+    &addressable,
     NULL,
     NULL,
     &introspection,
