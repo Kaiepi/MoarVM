@@ -78,7 +78,6 @@ struct MVMIOSockety {
             MVMint64 family, MVMint64 type, MVMint64 protocol,
             MVMint32 backlog);
     MVMObject * (*accept) (MVMThreadContext *tc, MVMOSHandle *h);
-    MVMint64 (*getport) (MVMThreadContext *tc, MVMOSHandle *h);
 };
 
 /* I/O operations on handles that can have a local or remote address associated
@@ -130,7 +129,6 @@ void MVM_io_bind(MVMThreadContext *tc,
         MVMint64 family_value, MVMint64 type_value, MVMint64 protocol_value,
         MVMint32 backlog);
 MVMObject * MVM_io_accept(MVMThreadContext *tc, MVMObject *oshandle);
-MVMint64 MVM_io_getport(MVMThreadContext *tc, MVMObject *oshandle);
 MVMObject * MVM_io_getsockname(MVMThreadContext *tc, MVMObject *oshandle);
 MVMObject * MVM_io_getpeername(MVMThreadContext *tc, MVMObject *oshandle);
 void MVM_io_set_buffer_size(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 size);

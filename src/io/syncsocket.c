@@ -339,31 +339,6 @@ static void socket_bind(MVMThreadContext *tc,
     }
 }
 
-MVMint64 socket_getport(MVMThreadContext *tc, MVMOSHandle *h) {
-    MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
-
-    struct sockaddr_storage name;
-    int error;
-    socklen_t len = sizeof(struct sockaddr_storage);
-    MVMint64 port = 0;
-
-    error = getsockname(data->handle, (struct sockaddr *) &name, &len);
-
-    if (error != 0)
-        MVM_exception_throw_adhoc(tc, "Failed to getsockname: %s", strerror(errno));
-
-    switch (name.ss_family) {
-        case AF_INET6:
-            port = ntohs((*( struct sockaddr_in6 *) &name).sin6_port);
-            break;
-        case AF_INET:
-            port = ntohs((*( struct sockaddr_in *) &name).sin_port);
-            break;
-    }
-
-    return port;
-}
-
 static MVMObject * socket_getsockname(MVMThreadContext *tc, MVMOSHandle *h) {
     const MVMIOSyncSocketData *data;
     struct sockaddr_storage    address_storage;
@@ -441,8 +416,7 @@ static const MVMIOSyncWritable  sync_writable = { socket_write_bytes,
                                                   socket_truncate };
 static const MVMIOSockety             sockety = { socket_connect,
                                                   socket_bind,
-                                                  socket_accept,
-                                                  socket_getport };
+                                                  socket_accept };
 static const MVMIOAddressable     addressable = { socket_getsockname,
                                                   socket_getpeername };
 static const MVMIOIntrospection introspection = { socket_is_tty,

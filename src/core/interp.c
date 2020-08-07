@@ -5264,10 +5264,6 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     GET_REG(cur_op, 2).s, GET_REG(cur_op, 4).s, GET_REG(cur_op, 6).i64);
                 cur_op += 8;
                 goto NEXT;
-            OP(getport_sk):
-                GET_REG(cur_op, 0).i64 = MVM_io_getport(tc, GET_REG(cur_op, 2).o);
-                cur_op += 4;
-                goto NEXT;
             OP(cpucores):
                 GET_REG(cur_op, 0).i64 = MVM_platform_cpu_count();
                 cur_op += 2;
@@ -6784,6 +6780,8 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 MVM_exception_throw_adhoc(tc, "The newlexotic op was removed in MoarVM 2017.08.");
             OP(DEPRECATED_34):
                 MVM_exception_throw_adhoc(tc, "The lexoticresult op was removed in MoarVM 2017.08.");
+            OP(DEPRECATED_35):
+                MVM_exception_throw_adhoc(tc, "The getport op was removed in MoarVM <VERSION>.");
             OP(coverage_log): {
                 MVMString *filename = MVM_cu_string(tc, cu, GET_UI32(cur_op, 0));
                 MVMuint32 lineno    = GET_UI32(cur_op, 4);

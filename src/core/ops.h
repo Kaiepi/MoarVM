@@ -762,7 +762,7 @@
 #define MVM_OP_setdispatcherfor 758
 #define MVM_OP_strfromname 759
 #define MVM_OP_indexic_s 760
-#define MVM_OP_getport_sk 761
+#define MVM_OP_DEPRECATED_35 761
 #define MVM_OP_cpucores 762
 #define MVM_OP_eqaticim_s 763
 #define MVM_OP_indexicim_s 764
