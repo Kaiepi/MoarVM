@@ -45,7 +45,7 @@ GetOptions(\%args, qw(
     os=s shell=s toolchain=s compiler=s
     ar=s cc=s ld=s make=s has-sha has-libuv
     static has-libtommath has-libatomic_ops
-    has-dyncall has-libffi pkgconfig=s
+    has-dyncall has-libffi has-ldns pkgconfig=s
     build=s host=s big-endian jit! enable-jit
     prefix=s bindir=s libdir=s mastdir=s
     relocatable make-install asan ubsan tsan
@@ -93,7 +93,7 @@ if ( $args{relocatable} && ($^O eq 'aix' || $^O eq 'openbsd') ) {
 }
 
 for (qw(coverage instrument static big-endian has-libtommath has-sha has-libuv
-        has-libatomic_ops asan ubsan tsan valgrind dtrace show-vec)) {
+        has-libatomic_ops has-ldns asan ubsan tsan valgrind dtrace show-vec)) {
     $args{$_} = 0 unless defined $args{$_};
 }
 
@@ -372,6 +372,22 @@ if ($config{pkgconfig_works} && has_native_library('libzstd')) {
 else {
     print "did not find libzstd; will not use heap snapshot format version 3\n";
     $config{heapsnapformat} = 2;
+}
+
+if ($args{'has-ldns'}) {
+    unshift @{$config{usrlibs}}, 'ldns';
+    $defaults{-thirdparty}->{ldns} = undef;
+    setup_native_library('libldns') if $config{pkgconfig_works};
+}
+elsif ($^O eq 'MSWin32') {
+    push @{$config{defs}}, 'HAVE_WINDNS';
+    $defaults{-thirdparty}->{ldns} = undef; # Use WinDNS instead.
+}
+else {
+    $config{moar_cincludes} .= ' ' . $defaults{ccinc} . '3rdparty/ldns';
+    $config{install}        .= "\t\$(MKPATH) \"\$(DESTDIR)\$(PREFIX)/include/ldns\"\n"
+                             . "\t\$(MKPATH) \"\$(DESTDIR)\$(PREFIX)/include/ldns/ldns\"\n"
+                             . "\t\$(CP) 3rdparty/ldns/ldns/*.h \"\$(DESTDIR)\$(PREFIX)/include/ldns/ldns\"\n";
 }
 
 # mangle library names
@@ -959,7 +975,7 @@ __END__
                    [--debug] [--optimize] [--instrument]
                    [--static] [--prefix <path>] [--relocatable]
                    [--has-libtommath] [--has-sha] [--has-libuv]
-                   [--has-libatomic_ops]
+                   [--has-libatomic_ops] [--has-ldns]
                    [--asan] [--ubsan] [--tsan] [--no-jit]
                    [--telemeh] [--git-cache-dir <path>]
 
@@ -1150,6 +1166,8 @@ Build and install MoarVM in addition to configuring it.
 =item --has-dyncall
 
 =item --has-libffi
+
+=item --has-ldns
 
 =item --pkgconfig=/path/to/pkgconfig/executable
 

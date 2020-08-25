@@ -16,3 +16,6 @@
 [submodule "3rdparty/libatomicops"]
 	path = 3rdparty/libatomicops
 	url = https://github.com/MoarVM/libatomic_ops
+[submodule "3rdparty/ldns"]
+	path = 3rdparty/ldns
+	url = https://github.com/NLnetlabs/ldns.git

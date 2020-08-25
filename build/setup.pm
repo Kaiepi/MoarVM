@@ -73,16 +73,33 @@ our %TP_UV = (
     # the OS needs to provide a C<src> or C<objects> setting
 );
 
+our %TP_LDNS = (
+    name  => 'ldns',
+    path  => '3rdparty/ldns/lib',
+    rule  => 'cd 3rdparty/ldns && '
+           . 'libtoolize -ci && '
+           . 'autoreconf -fi && '
+           . 'CC=\'$(CC)\' CFLAGS=\'-fPIC\' ./configure ' . join(' ', qw(
+               --disable-shared
+               --disable-ldns-config
+               --without-pyldnsx
+               --without-ssl --disable-sha2 --disable-gost --disable-ecdsa --disable-ed25519 --disable-dane
+           )) . ' && '
+           . '$(MAKE)',
+    clean => 'cd 3rdparty/ldns && $(MAKE) distclean',
+);
+
 our %THIRDPARTY = (
-    lao => { %TP_LAO },
-    tom => { %TP_TOM },
-    sha => { %TP_SHA },
-    mt  => { %TP_MT },
-    dc  => { %TP_DC },
-    dcb => { %TP_DCB },
-    dl  => { %TP_DL },
-    uv  => { %TP_UVDUMMY },
-    cmp => { %TP_CMP },
+    lao  => { %TP_LAO },
+    tom  => { %TP_TOM },
+    sha  => { %TP_SHA },
+    mt   => { %TP_MT },
+    dc   => { %TP_DC },
+    dcb  => { %TP_DCB },
+    dl   => { %TP_DL },
+    uv   => { %TP_UVDUMMY },
+    cmp  => { %TP_CMP },
+    ldns => { %TP_LDNS },
 );
 
 # shell configuration
@@ -428,7 +445,7 @@ our %COMPILERS = (
 our %OS_WIN32 = (
     exe      => '.exe',
     defs     => [ qw( WIN32 AO_ASSUME_WINDOWS98 ) ],
-    syslibs  => [ qw( shell32 ws2_32 mswsock rpcrt4 advapi32 psapi iphlpapi userenv user32 ) ],
+    syslibs  => [ qw( shell32 ws2_32 mswsock rpcrt4 advapi32 psapi iphlpapi dnsapi userenv user32 ) ],
     platform => '$(PLATFORM_WIN32)',
 
     dllimport => '__declspec(dllimport)',

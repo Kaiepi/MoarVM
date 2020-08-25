@@ -38,6 +38,14 @@
 #include <dyncall_callback.h>
 #endif
 
+/* DNS (WinDNS on Windows by default, LDNS otherwise) */
+#ifdef HAVE_WINDNS
+#error "WinDNS support NYI"
+/* #include <windns.h> */
+#else
+#include <ldns/ldns.h>
+#endif
+
 /* forward declarations */
 #include "types.h"
 

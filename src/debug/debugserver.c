@@ -4,9 +4,15 @@
 #define DEBUGSERVER_MAJOR_PROTOCOL_VERSION 1
 #define DEBUGSERVER_MINOR_PROTOCOL_VERSION 2
 
+#ifndef bool
 #define bool int
+#endif
+#ifndef true
 #define true TRUE
+#endif
+#ifndef false
 #define false FALSE
+#endif
 
 #include "cmp.h"
 
