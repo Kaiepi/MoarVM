@@ -1937,6 +1937,8 @@ start:
     case MVM_OP_addrfrombuf_ip6:
     case MVM_OP_addrfrombuf_un:
     case MVM_OP_addrtobuf:
+        /* DNS */
+    case MVM_OP_dnsresolver:
         /* Specialized atomics */
     case MVM_OP_sp_cas_o:
     case MVM_OP_sp_atomicload_o:

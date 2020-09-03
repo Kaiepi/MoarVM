@@ -2580,6 +2580,36 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         |3:
         break;
     }
+    case MVM_OP_dnsresolver: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 name_servers = ins->operands[1].reg.orig;
+        MVMint16 default_port = ins->operands[2].reg.orig;
+        MVMint16 buf_type = ins->operands[3].reg.orig;
+        /* if (REPR(name_servers)->ID != MVM_REPR_ID_VMArray || !IS_CONCRETE(name_servers)) */
+        | mov ARG2, aword WORK[name_servers];
+        | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_VMArray;
+        | jnz >1;
+        | test_type_object ARG2;
+        | jnz >1;
+        /* if (REPR(buf_type)->ID != MVM_REPR_ID_VMArray) */
+        | mov ARG4, aword WORK[buf_type];
+        | cmp_repr_id ARG2, TMP2, MVM_REPR_ID_VMArray;
+        | jnz >2;
+        /* Call MVM_io_dns_create_resolver: */
+        | mov ARG1, TC;
+        | xor TMP2, TMP2;
+        | mov TMP2w, word WORK[default_port];
+        | mov ARG3, TMP2;
+        | callp &MVM_io_dns_create_resolver;
+        | mov aword WORK[result], RV;
+        | jmp >3;
+        |1:
+        | throw_adhoc "dnsresolver requires a concrete VMArray";
+        |2:
+        | throw_adhoc "dnsresolver requires a VMArray";
+        |3:
+        break;
+    }
     case MVM_OP_sp_fastbox_i:
     case MVM_OP_sp_fastbox_i_ic:
     case MVM_OP_sp_fastbox_bi:

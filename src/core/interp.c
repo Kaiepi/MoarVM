@@ -5842,6 +5842,24 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 4;
                 goto NEXT;
             }
+            OP(dnsresolver): {
+                MVMObject *name_servers = GET_REG(cur_op, 2).o;
+                MVMObject *buf_type     = GET_REG(cur_op, 6).o;
+                if (REPR(name_servers)->ID != MVM_REPR_ID_VMArray || !IS_CONCRETE(name_servers))
+                    MVM_exception_throw_adhoc(tc,
+                        "dnsresolver requires a concrete object with REPR VMArray, got %s (%s)",
+                        REPR(name_servers)->name, MVM_6model_get_debug_name(tc, name_servers));
+                else if (REPR(buf_type)->ID != MVM_REPR_ID_VMArray)
+                    MVM_exception_throw_adhoc(tc,
+                        "dnsresolver requires an object with REPR VMArray, got %s (%s)",
+                        REPR(buf_type)->name, MVM_6model_get_debug_name(tc, buf_type));
+                else
+                    GET_REG(cur_op, 0).o = MVM_io_dns_create_resolver(tc,
+                        (MVMArray *)name_servers, (MVMuint16)GET_REG(cur_op, 4).i64,
+                        buf_type);
+                cur_op += 8;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;

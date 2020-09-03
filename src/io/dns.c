@@ -101,3 +101,81 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
         return arr;
     }
 }
+
+MVMObject * MVM_io_dns_create_resolver(MVMThreadContext *tc,
+        MVMArray *name_servers, MVMuint16 default_port,
+        MVMObject *buf_type) {
+#ifdef HAVE_WINDNS
+    /* TODO */
+#else /* HAVE_WINDNS */
+    MVMResolver *resolver;
+    size_t       i;
+    ldns_status  error;
+
+    /* Validate our types: */
+    if (STABLE(name_servers) != STABLE(tc->instance->boot_types.BOOTArray))
+        MVM_exception_throw_adhoc(tc,
+            "dnsresolver name servers list must be an array of IP addresses");
+    for (i = 0; i < name_servers->body.elems; ++i)
+        if (REPR(name_servers->body.slots.o[i])->ID != MVM_REPR_ID_MVMAddress)
+            MVM_exception_throw_adhoc(tc,
+                "dnsresolver name servers list must be an array of IP addresses");
+
+    /* Allocate our DNS resolver: */
+    error    = LDNS_STATUS_OK;
+    resolver = (MVMResolver *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTResolver);
+    if ((error = ldns_resolver_new_frm_fp(&resolver->body.context, NULL)))
+        goto error;
+
+    /* Set our context's name servers: */
+    if (name_servers->body.elems) {
+        ldns_rdf *ldns_name_servers[name_servers->body.elems + 1];
+
+        for (i = 0; i < name_servers->body.elems; ++i) {
+            MVMAddress      *address;
+            struct sockaddr *native_address;
+            socklen_t        native_address_len;
+            ldns_rdf        *ldns_address;
+
+            address            = (MVMAddress *)name_servers->body.slots.o[i];
+            native_address     = &address->body.storage.any;
+            native_address_len = MVM_address_get_storage_length(tc, native_address);
+            switch (native_address->sa_family) {
+                case AF_INET:
+                    ldns_address = ldns_rdf_new_frm_data(LDNS_RDF_TYPE_A, native_address_len, native_address);
+                    break;
+                case AF_INET6:
+                    ldns_address = ldns_rdf_new_frm_data(LDNS_RDF_TYPE_AAAA, native_address_len, native_address);
+                    break;
+                default:
+                    error = LDNS_STATUS_UNKNOWN_INET;
+                    goto error;
+            }
+
+            if (ldns_address)
+                ldns_name_servers[i] = ldns_address;
+            else {
+                error = LDNS_STATUS_MEM_ERR;
+                goto error;
+            }
+        }
+        ldns_name_servers[i] = NULL;
+
+        ldns_resolver_set_nameservers(resolver->body.context, ldns_name_servers);
+    }
+
+    /* Set our context's default port: */
+    if (default_port)
+        ldns_resolver_set_port(resolver->body.context, default_port);
+
+    /* Back to the resolver itself, set up its query buffer type: */
+    MVM_ASSIGN_REF(tc, &(resolver->common.header), resolver->body.buf_type, buf_type);
+    return (MVMObject *)resolver;
+
+error:
+    assert(error != LDNS_STATUS_OK);
+    MVM_exception_throw_adhoc(tc,
+        "Error creating a DNS resolution context: %s",
+        ldns_get_errorstr_by_id(error));
+#endif /* HAVE_WINDNS */
+}
