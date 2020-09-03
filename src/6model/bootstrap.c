@@ -604,7 +604,7 @@ void MVM_6model_bootstrap(MVMThreadContext *tc) {
     /* Create stub VMNull, BOOTInt, BOOTNum, BOOTStr, BOOTArray, BOOTHash,
      * BOOTCCode, BOOTCode, BOOTThread, BOOTIter, BOOTContext, SCRef,
      * CallCapture, BOOTIO, BOOTException, BOOTQueue, BOOTAsync,
-     * BOOTReentrantMutex, and BOOTAddress types. */
+     * BOOTReentrantMutex, BOOTAddress, and BOOTResolver types. */
 #define create_stub_boot_type(tc, reprid, slot, makeboolspec, boolspec) do { \
     const MVMREPROps *repr = MVM_repr_get_by_id(tc, reprid); \
     MVMObject *type = tc->instance->slot = repr->type_object_for(tc, NULL); \
@@ -643,6 +643,7 @@ void MVM_6model_bootstrap(MVMThreadContext *tc) {
     create_stub_boot_type(tc, MVM_REPR_ID_MVMStaticFrameSpesh, StaticFrameSpesh, 0, MVM_BOOL_MODE_NOT_TYPE_OBJECT);
     create_stub_boot_type(tc, MVM_REPR_ID_MVMSpeshPluginState, SpeshPluginState, 0, MVM_BOOL_MODE_NOT_TYPE_OBJECT);
     create_stub_boot_type(tc, MVM_REPR_ID_MVMAddress, boot_types.BOOTAddress, 0, MVM_BOOL_MODE_NOT_TYPE_OBJECT);
+    create_stub_boot_type(tc, MVM_REPR_ID_MVMResolver, boot_types.BOOTResolver, 0, MVM_BOOL_MODE_NOT_TYPE_OBJECT);
 
     /* Bootstrap the KnowHOW type, giving it a meta-object. */
     bootstrap_KnowHOW(tc);
@@ -680,6 +681,7 @@ void MVM_6model_bootstrap(MVMThreadContext *tc) {
     meta_objectifier(tc, StaticFrameSpesh, "StaticFrameSpesh");
     meta_objectifier(tc, SpeshPluginState, "SpeshPluginState");
     meta_objectifier(tc, boot_types.BOOTAddress, "BOOTAddress");
+    meta_objectifier(tc, boot_types.BOOTResolver, "BOOTResolver");
 
     /* Create the KnowHOWAttribute type. */
     create_KnowHOWAttribute(tc);

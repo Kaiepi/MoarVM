@@ -306,3 +306,5 @@ typedef struct MVMAddressBody MVMAddressBody;
 typedef struct MVMSocketFamily MVMSocketFamily;
 typedef struct MVMSocketType MVMSocketType;
 typedef struct MVMSocketProtocol MVMSocketProtocol;
+typedef struct MVMResolver MVMResolver;
+typedef struct MVMResolverBody MVMResolverBody;
