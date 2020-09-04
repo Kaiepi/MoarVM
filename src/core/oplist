@@ -899,6 +899,7 @@ dnsresolve          w(obj) r(str) r(int64) r(int64) r(int64) r(int64) r(int64)
 getsockname         w(obj) r(obj) :pure
 getpeername         w(obj) r(obj) :pure
 dnsresolver         w(obj) r(obj) r(int64) r(obj) :pure
+asyncdnsquery       w(obj) r(obj) r(obj) r(obj) r(str) r(int64) r(int64) r(obj) :pure
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.

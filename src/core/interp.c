@@ -5860,6 +5860,20 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 8;
                 goto NEXT;
             }
+            OP(asyncdnsquery): {
+                MVMObject *resolver = GET_REG(cur_op, 2).o;
+                if (REPR(resolver)->ID != MVM_REPR_ID_MVMResolver || !IS_CONCRETE(resolver))
+                    MVM_exception_throw_adhoc(tc,
+                        "asyncdnsquery requires a concrete object with REPR MVMResolver, got %s (%s)",
+                        REPR(resolver)->name, MVM_6model_get_debug_name(tc, resolver));
+                else
+                    GET_REG(cur_op, 0).o = MVM_io_dns_query_async(tc,
+                        (MVMResolver *)resolver, GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o,
+                        GET_REG(cur_op, 8).s, GET_REG(cur_op, 10).i64, GET_REG(cur_op, 12).i64,
+                        GET_REG(cur_op, 14).o);
+                cur_op += 16;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;

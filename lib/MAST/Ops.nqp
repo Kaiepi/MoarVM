@@ -841,7 +841,8 @@ BEGIN {
     2107,
     2114,
     2116,
-    2118);
+    2118,
+    2122);
     MAST::Ops.WHO<@counts> := nqp::list_i(0,
     2,
     2,
@@ -1680,7 +1681,8 @@ BEGIN {
     7,
     2,
     2,
-    4);
+    4,
+    8);
     MAST::Ops.WHO<@values> := nqp::list_i(10,
     8,
     18,
@@ -3802,6 +3804,14 @@ BEGIN {
     66,
     65,
     33,
+    65,
+    66,
+    65,
+    65,
+    65,
+    57,
+    33,
+    33,
     65);
     MAST::Ops.WHO<%codes> := nqp::hash('no_op', 0,
     'const_i8', 1,
@@ -4641,7 +4651,8 @@ BEGIN {
     'dnsresolve', 835,
     'getsockname', 836,
     'getpeername', 837,
-    'dnsresolver', 838);
+    'dnsresolver', 838,
+    'asyncdnsquery', 839);
     MAST::Ops.WHO<@names> := nqp::list_s('no_op',
     'const_i8',
     'const_i16',
@@ -5480,7 +5491,8 @@ BEGIN {
     'dnsresolve',
     'getsockname',
     'getpeername',
-    'dnsresolver');
+    'dnsresolver',
+    'asyncdnsquery');
     MAST::Ops.WHO<%generators> := nqp::hash('no_op', sub () {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
@@ -11814,5 +11826,18 @@ BEGIN {
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
         my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
         my uint $index3 := nqp::unbox_u($op3); nqp::writeuint($bytecode, nqp::add_i($elems, 8), $index3, 5);
+    },
+    'asyncdnsquery', sub ($op0, $op1, $op2, $op3, $op4, $op5, $op6, $op7) {
+        my $bytecode := $*MAST_FRAME.bytecode;
+        my uint $elems := nqp::elems($bytecode);
+        nqp::writeuint($bytecode, $elems, 839, 5);
+        my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
+        my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
+        my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
+        my uint $index3 := nqp::unbox_u($op3); nqp::writeuint($bytecode, nqp::add_i($elems, 8), $index3, 5);
+        my uint $index4 := nqp::unbox_u($op4); nqp::writeuint($bytecode, nqp::add_i($elems, 10), $index4, 5);
+        my uint $index5 := nqp::unbox_u($op5); nqp::writeuint($bytecode, nqp::add_i($elems, 12), $index5, 5);
+        my uint $index6 := nqp::unbox_u($op6); nqp::writeuint($bytecode, nqp::add_i($elems, 14), $index6, 5);
+        my uint $index7 := nqp::unbox_u($op7); nqp::writeuint($bytecode, nqp::add_i($elems, 16), $index7, 5);
     });
 }
