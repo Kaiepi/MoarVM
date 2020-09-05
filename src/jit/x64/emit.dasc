@@ -2588,13 +2588,13 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         /* if (REPR(name_servers)->ID != MVM_REPR_ID_VMArray || !IS_CONCRETE(name_servers)) */
         | mov ARG2, aword WORK[name_servers];
         | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_VMArray;
-        | jnz >1;
+        | jne >1;
         | test_type_object ARG2;
         | jnz >1;
         /* if (REPR(buf_type)->ID != MVM_REPR_ID_VMArray) */
         | mov ARG4, aword WORK[buf_type];
         | cmp_repr_id ARG2, TMP2, MVM_REPR_ID_VMArray;
-        | jnz >2;
+        | jne >2;
         /* Call MVM_io_dns_create_resolver: */
         | mov ARG1, TC;
         | xor TMP2, TMP2;
@@ -2608,6 +2608,38 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         |2:
         | throw_adhoc "dnsresolver requires a VMArray";
         |3:
+        break;
+    }
+    case MVM_OP_asyncdnsquery: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 resolver = ins->operands[1].reg.orig;
+        MVMint16 queue = ins->operands[2].reg.orig;
+        MVMint16 schedulee = ins->operands[3].reg.orig;
+        MVMint16 domain_name = ins->operands[4].reg.orig;
+        MVMint16 type = ins->operands[5].reg.orig;
+        MVMint16 class = ins->operands[6].reg.orig;
+        MVMint16 async_task = ins->operands[7].reg.orig;
+        /* if (REPR(resolver)->ID != MVM_REPR_ID_MVMResolver || !IS_CONCRETE(resolver)) */
+        | mov ARG2, aword WORK[resolver];
+        | cmp_repr_id ARG2, TMP2, MVM_REPR_ID_MVMResolver;
+        | jne >1;
+        | test_type_object ARG2;
+        | jnz >1;
+        /* if (REPR(async_task)->ID != MVM_REPR_ID_MVMResolver) */
+        /* TMP1 == ARG8 */
+        | mov TMP1, aword WORK[async_task];
+        | cmp_repr_id TMP1, TMP3, MVM_REPR_ID_MVMAsyncTask;
+        | jne >2;
+        /* Call MVM_io_dns_query_async: */
+        | mov ARG1, TC;
+        | mov ARG3, aword WORK[queue];
+        | mov ARG4, aword WORK[schedulee];
+        | mov ARG5, aword WORK[domain_name];
+        | mov ARG6, qword WORK[type];
+        /* FUNCTION == ARG7 */
+        | mov FUNCTION, qword WORK[class];
+        | callp &MVM_io_dns_query_async;
+        | mov aword WORK[result], RV;
         break;
     }
     case MVM_OP_sp_fastbox_i:
