@@ -208,10 +208,23 @@ error:
  * library can be made to work in combination with the I/O event loop through
  * its ldns_udp_bgsend and ldns_tcp_bgsend functions, but because these
  * functions are too low level to handle anything related to DNS resolution
- * contexts, making a query is rather complex. To accomplish this, after setup,
- * we iterate through the DNS resolution context's name servers (handling
- * retries as we go), sending, polling, and processing responses to queries
- * until we either get a valid response or run out of name servers. */
+ * contexts, making a query is rather complex from our perspective.
+ *
+ * When we want to make a query, after setup, we iterate through the DNS
+ * resolution context's name servers. For each one, we send, poll, and process
+ * responses until we either get a valid response or run out of name servers to
+ * use. Should an error occur during this process, we retry making the query.
+ * How this works depends on how the query failed.
+ *
+ * In the case of a response getting truncated, we cycle through a few
+ * different methods of transmitting a question when retrying. The first
+ * attempt to make a query will use UDP, which unfortunately comes with a
+ * rather stringent maximum packet size, but is more efficient than the
+ * alternatives. If the response happens to be truncated, we retry making the
+ * query with UDP again, this time around using EDNS to allow a larger packet
+ * size to be used. If the response still manages to get truncated, then we
+ * retry one last time over TCP, which doesn't have any limitation on packet
+ * size, but is too inefficient to be using in all cases. */
 
 /* Information pertaining to DNS queries: */
 typedef struct {
@@ -224,14 +237,14 @@ typedef struct {
     uv_loop_t        *loop;
     int               work_idx;
 
-    MVMuint8        retry_count;
-    size_t          name_server_idx;
-    ldns_pkt       *question;
-    uv_prepare_t   *query;
-    MVMuint8       *response;
-    size_t          response_size;
-    int             truncated;
-    ldns_pkt_rcode  rcode;
+    uv_prepare_t *query;
+    ldns_pkt     *question;
+    ldns_pkt     *response;
+
+    size_t   name_server_idx;
+    MVMuint8 retry_count;
+    int      truncated;
+    int      use_tcp;
 } QueryInfo;
 
 /* Sends a query to a name server. The sending functions used yield a file
@@ -243,6 +256,8 @@ static void query_poll(uv_poll_t *handle, int status, int events);
  * we loop back to query_init to see if more attempts to make the DNS query
  * should be made. */
 static void query_process(uv_check_t *check);
+/* Completes the query, performing any cleanup necessary. */
+static void query_complete(QueryInfo *qi);
 
 static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
     MVMAsyncTask *task;
@@ -250,6 +265,8 @@ static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
     char         *domain_name_cstr;
     ldns_rdf     *domain_name;
     ldns_pkt     *packet;
+    uv_check_t   *check;
+    uv_poll_t    *handle;
     ldns_status   status;
     int           error;
     const char   *errstr_cstr;
@@ -260,10 +277,9 @@ static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
     qi->tc       = tc;
     qi->loop     = loop;
     qi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
-
-    status      = LDNS_STATUS_OK;
-    error       = 0;
-    errstr_cstr = NULL;
+    status       = LDNS_STATUS_OK;
+    error        = 0;
+    errstr_cstr  = NULL;
 
     /* Prepare a DNS packet to send: */
     domain_name_cstr = MVM_string_ascii_encode(tc, qi->domain_name, NULL, 0);
@@ -273,9 +289,6 @@ static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_
                  domain_name, qi->type, qi->class, LDNS_RD)))
         goto ldns_error;
     else {
-        uv_check_t *check;
-        uv_poll_t  *handle;
-
         check           = MVM_malloc(sizeof(uv_check_t));
         check->data     = qi;
         handle          = MVM_malloc(sizeof(uv_poll_t));
@@ -316,8 +329,7 @@ error:
 
         MVM_repr_push_o(tc, task->body.queue, result);
     });
-
-    MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
+    query_complete(qi);
 cleanup:
     if (domain_name)
         ldns_rdf_deep_free(domain_name);
@@ -332,71 +344,56 @@ static void query_init(uv_prepare_t *preparation) {
     MVMThreadContext *tc;
     MVMAsyncTask     *task;
 
-    size_t       question_size;
-    ldns_buffer *question_wire;
+    size_t       name_server_count;
     MVMuint8     retry_count;
-    size_t       name_server_idx;
+    size_t       question_size;
+    ldns_buffer *question_buffer;
 
     ldns_status  status;
     int          error;
     const char  *errstr_cstr;
 
-    handle        = (uv_poll_t *)preparation->data;
-    check         = (uv_check_t *)handle->data;
-    qi            = (QueryInfo *)check->data;
-    tc            = qi->tc;
-    task          = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
-    question_wire = NULL;
-    error         = 0;
-    status        = LDNS_STATUS_OK;
-    errstr_cstr   = NULL;
+    handle            = (uv_poll_t *)preparation->data;
+    check             = (uv_check_t *)handle->data;
+    qi                = (QueryInfo *)check->data;
+    tc                = qi->tc;
+    task              = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
+    name_server_count = ldns_resolver_nameserver_count(qi->resolver->body.context);
+    question_buffer   = NULL;
+    error             = 0;
+    status            = LDNS_STATUS_OK;
+    errstr_cstr       = NULL;
     uv_prepare_stop(preparation);
 
-    if (qi->truncated && ldns_resolver_fallback(qi->resolver->body.context)) {
-        /* DNS has a maximum UDP packet size of 512 bytes. This can be too
-         * small to contain a response to a query! When this is the case, the
-         * response gets truncated. With EDNS, we can configure a larger packet
-         * size to allow, but use of this feature for all DNS queries is
-         * discouraged. When a response is too large, try to make the query
-         * once more to the current name server, this time around using EDNS: */
-        ldns_pkt_set_edns_do(qi->question, 1);
-        if (!ldns_pkt_edns_udp_size(qi->question))
-            ldns_pkt_set_edns_udp_size(qi->question,
-                ldns_resolver_edns_udp_size(qi->resolver->body.context));
-
-        /* Reuse the current name server: */
-        name_server_idx = qi->name_server_idx;
-        question_size   = ldns_pkt_edns_udp_size(qi->question);
-
-        /* Don't forget to prevent this query from being considered truncated! */
-        qi->truncated = 0;
-    }
-    else {
-        /* Don't forget not to use EDNS if any previous query did! */
-        if (ldns_pkt_edns_do(qi->question))
-            ldns_pkt_set_edns_do(qi->question, 0);
-
-        /* Select the next name server to make the query to: */
+    /* Determine how large a packet we need to make the query: */
+    if (!qi->truncated || !ldns_resolver_fallback(qi->resolver->body.context))
         question_size = LDNS_MIN_BUFLEN;
-        if (qi->retry_count == ldns_resolver_retry(qi->resolver->body.context)) {
-            /* We're out of retries. Use the next name server: */
-            name_server_idx = ++qi->name_server_idx;
-            qi->retry_count = 0;
-        }
-        else {
-            /* Try again with the current name server: */
-            name_server_idx = qi->name_server_idx;
-            qi->retry_count++;
-        }
+    else if (!qi->use_tcp) {
+        ldns_pkt_set_edns_do(qi->question, 1);
+        question_size = ldns_pkt_edns_udp_size(qi->question);
+        if (!question_size)
+            ldns_pkt_set_edns_udp_size(qi->question, (question_size = 4096));
     }
+    else
+        question_size = LDNS_MAX_PACKETLEN;
 
-    if (name_server_idx == ldns_resolver_nameserver_count(qi->resolver->body.context))
-        goto query_error;
-    else if (!(question_wire = ldns_buffer_new(question_size))) {
+    /* If we have a name server to make our query to, then prepare our packet
+     * to send: */
+    if (!name_server_count) {
+        status = LDNS_STATUS_RES_NO_NS;
+        goto ldns_error;
+    }
+    else if (qi->name_server_idx == name_server_count) {
+        /* Give the final response's RCODE as an error message: */
+        ldns_pkt_rcode rcode = ldns_pkt_get_rcode(qi->response);
+        errstr_cstr          = ldns_lookup_by_id(ldns_rcodes, (int)rcode)->name;
+        goto error;
+    }
+    else if (!(question_buffer = ldns_buffer_new(question_size))) {
         status = LDNS_STATUS_MEM_ERR;
         goto ldns_error;
     }
-    else if ((status = ldns_pkt2buffer_wire(question_wire, qi->question)))
+    else if ((status = ldns_pkt2buffer_wire(question_buffer, qi->question)))
         goto ldns_error;
     else {
         ldns_rdf                *ldns_address;
@@ -405,15 +402,21 @@ static void query_init(uv_prepare_t *preparation) {
         struct timeval           timeout;
         int                      fd;
 
-        /* Prepare the selected name server for a DNS query: */
-        ldns_address   = ldns_resolver_nameservers(qi->resolver->body.context)[name_server_idx];
+        /* Prepare the selected name server for our query: */
+        ldns_address   = ldns_resolver_nameservers(qi->resolver->body.context)[qi->name_server_idx];
         native_address = ldns_rdf2native_sockaddr_storage(ldns_address, 0, &native_address_len);
-        memset(&timeout, 0, sizeof(timeout)); /* Unused by LDNS. */
+        memset(&timeout, 0, sizeof(timeout));
 
-        /* Begin the DNS query: */
-        fd = ldns_udp_bgsend(question_wire, native_address, native_address_len, timeout);
+        /* Send our question: */
+        fd = qi->use_tcp ?
+             ldns_tcp_bgsend(question_buffer, native_address, native_address_len, timeout) :
+             ldns_udp_bgsend(question_buffer, native_address, native_address_len, timeout);
+        if (ldns_pkt_edns_do(qi->question))
+            ldns_pkt_set_edns_do(qi->question, 0);
+
+        /* If we managed to send our question, start polling for a response: */
         if (fd < 0) {
-            status = LDNS_STATUS_NETWORK_ERR;
+            status = LDNS_STATUS_SOCKET_ERROR;
             goto ldns_error;
         }
         else if ((error = uv_poll_init(qi->loop, handle, fd))) {
@@ -428,11 +431,6 @@ static void query_init(uv_prepare_t *preparation) {
             return;
     }
 
-query_error:
-    /* Give the final response's RCODE as an error message: */
-    assert(qi->rcode);
-    errstr_cstr = ldns_lookup_by_id(ldns_rcodes, (int)qi->rcode)->name;
-    goto error;
 ldns_error:
     assert(status);
     errstr_cstr = ldns_get_errorstr_by_id(status);
@@ -454,40 +452,76 @@ error:
         });
         MVM_repr_push_o(tc, task->body.queue, result);
     });
-
-    MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
+    query_complete(qi);
 cleanup:
-    ldns_buffer_free(question_wire);
+    ldns_buffer_free(question_buffer);
 }
 
 static void query_poll(uv_poll_t *handle, int status, int events) {
-    uv_check_t *check;
-    QueryInfo  *qi;
-    uv_os_fd_t  handle_fh;
-    int         handle_fd;
-    int         error;
-    const char *errstr_cstr;
+    uv_check_t  *check;
+    QueryInfo   *qi;
+    uv_os_fd_t   handle_fh;
+    int          handle_fd;
+    MVMuint8    *response_wire;
+    size_t       response_size;
+    ldns_status  response_status;
+    int          error;
+    const char  *errstr_cstr;
 
-    check       = (uv_check_t *)handle->data;
-    qi          = (QueryInfo *)check->data;
+    check           = (uv_check_t *)handle->data;
+    qi              = (QueryInfo *)check->data;
     uv_fileno((uv_handle_t *)handle, &handle_fh);
-    handle_fd   = uv_open_osfhandle(handle_fh);
-    error       = 0;
-    errstr_cstr = NULL;
+    handle_fd       = uv_open_osfhandle(handle_fh);
+    response_status = LDNS_STATUS_OK;
+    error           = 0;
+    errstr_cstr     = NULL;
     uv_close((uv_handle_t *)handle, NULL);
 
     if (!status && (events & UV_READABLE)) {
-        if ((qi->response = ldns_udp_read_wire(handle_fd, &qi->response_size, NULL, NULL))) {
-            if ((error = uv_check_start(check, query_process)))
-                errstr_cstr = uv_strerror(error);
+        /* Read the response to our query: */
+        if ((response_wire = ldns_udp_read_wire(handle_fd, &response_size, NULL, NULL))) {
+            /* Prepare to process the response: */
+            ldns_pkt_free(qi->response);
+            if ((response_status = ldns_wire2pkt(&qi->response, response_wire, response_size)))
+                goto ldns_error;
+            else if ((error = uv_check_start(check, query_process)))
+                goto uv_error;
+            else
+                goto cleanup;
         }
-        else
-            errstr_cstr = ldns_get_errorstr_by_id(LDNS_STATUS_NETWORK_ERR);
-    }
-    else if (status != UV_ECANCELED)
-        errstr_cstr = uv_strerror(status);
+        else {
+            /* A networking error occurred. Retry making the query to the same
+             * name server (or the next if we hit the maximum retry count): */
+            if (qi->retry_count == ldns_resolver_retry(qi->resolver->body.context)) {
+                qi->name_server_idx++;
+                qi->retry_count = 0;
+                qi->truncated   = 0;
+                qi->use_tcp     = 0;
+            }
+            else
+                qi->retry_count++;
 
-    if (errstr_cstr) {
+            if ((error = uv_prepare_start(qi->query, query_init)))
+                goto uv_error;
+            else
+                goto cleanup;
+        }
+    }
+    else if (status == UV_ECANCELED)
+        goto cleanup;
+    else
+        goto uv_error;
+
+ldns_error:
+    assert(response_status);
+    errstr_cstr = ldns_get_errorstr_by_id(response_status);
+    goto error;
+uv_error:
+    assert(error);
+    errstr_cstr = uv_strerror(error);
+error:
+    assert(errstr_cstr);
+    {
         MVMThreadContext *tc     = qi->tc;
         MVMAsyncTask     *task   = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
         MVMObject        *result = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
@@ -500,16 +534,17 @@ static void query_poll(uv_poll_t *handle, int status, int events) {
                 tc->instance->boot_types.BOOTStr, errstr));
         });
         MVM_repr_push_o(tc, task->body.queue, result);
-
-        MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
     }
+    query_complete(qi);
+cleanup:
+    if (response_wire)
+        MVM_free(response_wire);
 }
 
 static void query_process(uv_check_t *check) {
     QueryInfo        *qi;
     MVMThreadContext *tc;
     MVMAsyncTask     *task;
-    ldns_pkt         *packet;
     ldns_pkt_rcode    rcode;
     ldns_status       status;
     int               error;
@@ -518,20 +553,30 @@ static void query_process(uv_check_t *check) {
     qi          = (QueryInfo *)check->data;
     tc          = qi->tc;
     task        = (MVMAsyncTask *)MVM_io_eventloop_get_active_work(tc, qi->work_idx);
+    rcode       = ldns_pkt_get_rcode(qi->response);
     status      = LDNS_STATUS_OK;
     error       = 0;
     errstr_cstr = NULL;
     uv_check_stop(check);
-    if ((status = ldns_wire2pkt(&packet, qi->response, qi->response_size)))
-        goto ldns_error;
-    else
-        rcode = ldns_pkt_get_rcode(packet);
 
-    if (ldns_pkt_tc(packet)) {
-        /* The response was too large to transmit and thus got truncated. Try
-         * again with EDNS for a larger packet size: */
-        qi->truncated = 1;
-        goto retry;
+    if (ldns_pkt_tc(qi->response)) {
+        /* We got a truncated response of some sort. How we retry making the
+         * query depends on how we sent it: */
+        qi->retry_count = 0;
+        if (qi->use_tcp) {
+            /* Truncation should never occur with a trustworthy name server
+             * over TCP. Ignore whatever nonsense we got and retry with the
+             * next name server: */
+            qi->name_server_idx++;
+            qi->truncated = 0;
+            qi->use_tcp   = 0;
+        }
+        else if (qi->truncated)
+            qi->use_tcp = 1;
+        else
+            qi->truncated = 1;
+
+        /* Fall through. */
     }
     else if (rcode == LDNS_RCODE_NOERROR) {
         /* We got a successful response! */
@@ -542,7 +587,7 @@ static void query_process(uv_check_t *check) {
                 size_t        i;
 
                 /* Push each of the answer section's RRs: */
-                rrs = ldns_pkt_answer(packet);
+                rrs = ldns_pkt_answer(qi->response);
                 for (i = 0; i < ldns_rr_list_rr_count(rrs); ++i) {
                     ldns_rr   *rr     = ldns_rr_list_rr(rrs, i);
                     MVMObject *rr_box = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
@@ -637,20 +682,25 @@ static void query_process(uv_check_t *check) {
             MVM_repr_push_o(tc, task->body.queue, result);
         });
 
-        goto completion;
+        query_complete(qi);
+        return;
     }
     else {
-        /* There was some sort of error in the response. Try again with the
-         * next configured name server: */
-        qi->rcode = rcode;
-        goto retry;
+        /* We got a protocol-level error. Retry making the query with the next
+         * name server: */
+        qi->name_server_idx++;
+        qi->retry_count = 0;
+        qi->truncated   = 0;
+        qi->use_tcp     = 0;
+
+        /* Fall through. */
     }
 
-retry:
+    /* If we get here, then we want to retry making the query: */
     if ((error = uv_prepare_start(qi->query, query_init)))
         goto uv_error;
     else
-        goto cleanup;
+        return;
 
 ldns_error:
     assert(status);
@@ -673,30 +723,32 @@ error:
         });
         MVM_repr_push_o(tc, task->body.queue, result);
     });
-completion:
-    MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
-cleanup:
-    if (packet)
-        ldns_pkt_free(packet);
+    query_complete(qi);
+}
+
+static void query_free_handle(uv_handle_t *handle) {
+    MVM_free(handle);
+}
+
+static void query_complete(QueryInfo *qi) {
+    if (qi->query) {
+        uv_handle_t *preparation = (uv_handle_t *)qi->query;
+        uv_handle_t *handle      = (uv_handle_t *)preparation->data;
+        uv_handle_t *check       = (uv_handle_t *)handle->data;
+        if (!uv_is_closing(preparation))
+            uv_close(preparation, query_free_handle);
+        if (!uv_is_closing(handle))
+            uv_close(handle, query_free_handle);
+        if (!uv_is_closing(check))
+            uv_close(check, query_free_handle);
+    }
+    MVM_io_eventloop_remove_active_work(qi->tc, &(qi->work_idx));
 }
 
 static void query_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
     if (data) {
         QueryInfo *qi = (QueryInfo *)data;
-
-        if (qi->query) {
-            uv_prepare_t *preparation = qi->query;
-            uv_poll_t    *handle      = (uv_poll_t *)preparation->data;
-            uv_check_t   *check       = (uv_check_t *)handle->data;
-            if (uv_is_active((uv_handle_t *)preparation))
-                uv_prepare_stop(preparation);
-            else if (uv_is_active((uv_handle_t *)handle))
-                uv_close((uv_handle_t *)handle, NULL);
-            else if (uv_is_active((uv_handle_t *)check))
-                uv_check_stop(check);
-        }
-
-        MVM_io_eventloop_remove_active_work(tc, &(qi->work_idx));
+        query_complete(qi);
     }
 }
 
@@ -709,20 +761,10 @@ static void query_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *workl
 static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *data) {
     if (data) {
         QueryInfo *qi = (QueryInfo *)data;
-
-        if (qi->query) {
-            uv_prepare_t *preparation = qi->query;
-            uv_poll_t    *handle      = (uv_poll_t *)preparation->data;
-            uv_check_t   *check       = (uv_check_t *)handle->data;
-            MVM_free(check);
-            MVM_free(handle);
-            MVM_free(preparation);
-        }
-
-        ldns_pkt_free(qi->question);
+        if (qi->question)
+            ldns_pkt_free(qi->question);
         if (qi->response)
-            MVM_free(qi->response);
-
+            ldns_pkt_free(qi->response);
         MVM_free(qi);
     }
 }
@@ -763,4 +805,4 @@ MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
 
     return (MVMObject *)task;
 }
-#endif
+#endif /* HAVE_WINDNS */
