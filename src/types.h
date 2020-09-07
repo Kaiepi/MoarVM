@@ -308,3 +308,6 @@ typedef struct MVMSocketType MVMSocketType;
 typedef struct MVMSocketProtocol MVMSocketProtocol;
 typedef struct MVMResolver MVMResolver;
 typedef struct MVMResolverBody MVMResolverBody;
+#ifndef HAVE_WINDNS
+typedef union MVMResolverIPAddress MVMResolverIPAddress;
+#endif

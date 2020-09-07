@@ -108,98 +108,6 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
     }
 }
 
-MVMObject * MVM_io_dns_create_resolver(MVMThreadContext *tc,
-        MVMArray *name_servers, MVMuint16 default_port,
-        MVMObject *buf_type) {
-#ifdef HAVE_WINDNS
-    /* TODO */
-#else /* HAVE_WINDNS */
-    MVMResolver   *resolver;
-    ldns_resolver *context;
-    size_t         i;
-    ldns_status    error;
-
-    /* Validate our types: */
-    if (STABLE(name_servers) != STABLE(tc->instance->boot_types.BOOTArray))
-        MVM_exception_throw_adhoc(tc,
-            "dnsresolver name servers list must be an array of IP addresses");
-    for (i = 0; i < name_servers->body.elems; ++i)
-        if (REPR(name_servers->body.slots.o[i])->ID != MVM_REPR_ID_MVMAddress)
-            MVM_exception_throw_adhoc(tc,
-                "dnsresolver name servers list must be an array of IP addresses");
-
-    /* Allocate our DNS resolver: */
-    if ((error = ldns_resolver_new_frm_fp(&context, NULL)))
-        goto error;
-
-    /* Set our context's name servers: */
-    if (name_servers->body.elems) {
-        ldns_rdf **ldns_name_servers = MVM_malloc(name_servers->body.elems * sizeof(ldns_rdf *));
-        size_t    *ldns_rtt          = MVM_malloc(name_servers->body.elems * sizeof(size_t));
-        for (i = 0; i < name_servers->body.elems; ++i) {
-            MVMAddress      *address;
-            socklen_t        native_address_len;
-            struct sockaddr *native_address;
-            ldns_rdf        *ldns_address;
-
-            address            = (MVMAddress *)name_servers->body.slots.o[i];
-            native_address     = &address->body.storage.any;
-            native_address_len = MVM_address_get_storage_length(tc, native_address);
-            switch (native_address->sa_family) {
-                case AF_INET:
-                    ldns_address = ldns_rdf_new_frm_data(
-                        LDNS_RDF_TYPE_A,
-                        native_address_len,
-                        &address->body.storage.ip4.sin_addr);
-                    break;
-                case AF_INET6:
-                    ldns_address = ldns_rdf_new_frm_data(
-                        LDNS_RDF_TYPE_AAAA,
-                        native_address_len,
-                        &address->body.storage.ip6.sin6_addr);
-                    break;
-                default:
-                    error = LDNS_STATUS_UNKNOWN_INET;
-                    goto error;
-            }
-
-            if (ldns_address) {
-                ldns_name_servers[i] = ldns_address;
-                ldns_rtt[i]          = LDNS_RESOLV_RTT_MIN;
-            }
-            else {
-                error = LDNS_STATUS_MEM_ERR;
-                goto error;
-            }
-        }
-        ldns_resolver_set_nameservers(context, ldns_name_servers);
-        ldns_resolver_set_nameserver_count(context, i);
-        ldns_resolver_set_rtt(context, ldns_rtt);
-    }
-
-    /* Set our context's default port: */
-    if (default_port)
-        ldns_resolver_set_port(context, default_port);
-
-    /* Enable fallbacks to EDNS should UDP queries get truncated... */
-    ldns_resolver_set_fallback(context, 1);
-    /* ...which will always use a packet size of 4096 bytes: */
-    ldns_resolver_set_edns_udp_size(context, 4096);
-
-    /* Now we can create the resolver object: */
-    resolver = (MVMResolver *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTResolver);
-    resolver->body.context = context;
-    MVM_ASSIGN_REF(tc, &(resolver->common.header), resolver->body.buf_type, buf_type);
-    return (MVMObject *)resolver;
-
-error:
-    assert(error != LDNS_STATUS_OK);
-    MVM_exception_throw_adhoc(tc,
-        "Error creating a DNS resolution context: %s",
-        ldns_get_errorstr_by_id(error));
-#endif /* HAVE_WINDNS */
-}
-
 #ifdef HAVE_WINDNS
 /* TODO */
 #else /* HAVE_WINDNS */
@@ -808,6 +716,11 @@ MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
         MVMObject *async_task) {
     MVMAsyncTask *task;
     QueryInfo    *qi;
+
+    /* Ensure our resolver is set up for queries: */
+    if (!MVM_load(&resolver->body.configured))
+        MVM_exception_throw_adhoc(tc,
+            "DNS resolvers must be configured before queries can be made with them");
 
     /* Create our async task handle: */
     MVMROOT5(tc, resolver, queue, schedulee, domain_name, async_task, {

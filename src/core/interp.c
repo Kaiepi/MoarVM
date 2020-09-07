@@ -5842,30 +5842,40 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 4;
                 goto NEXT;
             }
-            OP(dnsresolver): {
+            OP(dnsconfigure): {
+                MVMObject *resolver     = GET_REG(cur_op, 0).o;
                 MVMObject *name_servers = GET_REG(cur_op, 2).o;
                 MVMObject *buf_type     = GET_REG(cur_op, 6).o;
-                if (REPR(name_servers)->ID != MVM_REPR_ID_VMArray || !IS_CONCRETE(name_servers))
+                if (REPR(resolver)->ID != MVM_REPR_ID_MVMResolver || !IS_CONCRETE(resolver))
                     MVM_exception_throw_adhoc(tc,
-                        "dnsresolver requires a concrete object with REPR VMArray, got %s (%s)",
+                        "dnsconfigure requires a concrete object with REPR Resolver, got %s (%s)",
+                        REPR(resolver)->name, MVM_6model_get_debug_name(tc, resolver));
+                else if (REPR(name_servers)->ID != MVM_REPR_ID_VMArray || !IS_CONCRETE(name_servers))
+                    MVM_exception_throw_adhoc(tc,
+                        "dnsconfigure requires a concrete object with REPR VMArray, got %s (%s)",
                         REPR(name_servers)->name, MVM_6model_get_debug_name(tc, name_servers));
                 else if (REPR(buf_type)->ID != MVM_REPR_ID_VMArray)
                     MVM_exception_throw_adhoc(tc,
-                        "dnsresolver requires an object with REPR VMArray, got %s (%s)",
+                        "dnsconfigure requires an object with REPR VMArray, got %s (%s)",
                         REPR(buf_type)->name, MVM_6model_get_debug_name(tc, buf_type));
                 else
-                    GET_REG(cur_op, 0).o = MVM_io_dns_create_resolver(tc,
+                    MVM_resolver_configure(tc, (MVMResolver *)resolver,
                         (MVMArray *)name_servers, (MVMuint16)GET_REG(cur_op, 4).i64,
                         buf_type);
                 cur_op += 8;
                 goto NEXT;
             }
             OP(asyncdnsquery): {
-                MVMObject *resolver = GET_REG(cur_op, 2).o;
+                MVMObject *resolver   = GET_REG(cur_op, 2).o;
+                MVMObject *async_task = GET_REG(cur_op, 14).o;
                 if (REPR(resolver)->ID != MVM_REPR_ID_MVMResolver || !IS_CONCRETE(resolver))
                     MVM_exception_throw_adhoc(tc,
                         "asyncdnsquery requires a concrete object with REPR MVMResolver, got %s (%s)",
                         REPR(resolver)->name, MVM_6model_get_debug_name(tc, resolver));
+                else if (REPR(async_task)->ID != MVM_REPR_ID_MVMAsyncTask)
+                    MVM_exception_throw_adhoc(tc,
+                        "asyncdnsquery requires an object with REPR AsyncTask, got %s (%s)",
+                        REPR(async_task)->name, MVM_6model_get_debug_name(tc, resolver));
                 else
                     GET_REG(cur_op, 0).o = MVM_io_dns_query_async(tc,
                         (MVMResolver *)resolver, GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o,

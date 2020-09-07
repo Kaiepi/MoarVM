@@ -839,7 +839,7 @@
 #define MVM_OP_dnsresolve 835
 #define MVM_OP_getsockname 836
 #define MVM_OP_getpeername 837
-#define MVM_OP_dnsresolver 838
+#define MVM_OP_dnsconfigure 838
 #define MVM_OP_asyncdnsquery 839
 #define MVM_OP_sp_guard 840
 #define MVM_OP_sp_guardconc 841

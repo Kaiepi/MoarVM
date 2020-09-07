@@ -1938,7 +1938,7 @@ start:
     case MVM_OP_addrfrombuf_un:
     case MVM_OP_addrtobuf:
         /* DNS */
-    case MVM_OP_dnsresolver:
+    case MVM_OP_dnsconfigure:
     case MVM_OP_asyncdnsquery:
         /* Specialized atomics */
     case MVM_OP_sp_cas_o:

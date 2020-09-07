@@ -839,7 +839,7 @@ static const void * const LABELS[] = {
     &&OP_dnsresolve,
     &&OP_getsockname,
     &&OP_getpeername,
-    &&OP_dnsresolver,
+    &&OP_dnsconfigure,
     &&OP_asyncdnsquery,
     &&OP_sp_guard,
     &&OP_sp_guardconc,

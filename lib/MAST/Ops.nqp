@@ -3801,7 +3801,7 @@ BEGIN {
     65,
     66,
     65,
-    66,
+    65,
     65,
     33,
     65,
@@ -4651,7 +4651,7 @@ BEGIN {
     'dnsresolve', 835,
     'getsockname', 836,
     'getpeername', 837,
-    'dnsresolver', 838,
+    'dnsconfigure', 838,
     'asyncdnsquery', 839);
     MAST::Ops.WHO<@names> := nqp::list_s('no_op',
     'const_i8',
@@ -5491,7 +5491,7 @@ BEGIN {
     'dnsresolve',
     'getsockname',
     'getpeername',
-    'dnsresolver',
+    'dnsconfigure',
     'asyncdnsquery');
     MAST::Ops.WHO<%generators> := nqp::hash('no_op', sub () {
         my $bytecode := $*MAST_FRAME.bytecode;
@@ -11818,7 +11818,7 @@ BEGIN {
         my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
     },
-    'dnsresolver', sub ($op0, $op1, $op2, $op3) {
+    'dnsconfigure', sub ($op0, $op1, $op2, $op3) {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
         nqp::writeuint($bytecode, $elems, 838, 5);
