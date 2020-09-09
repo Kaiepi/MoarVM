@@ -19,9 +19,7 @@ static MVMObject * type_object_for(MVMThreadContext *tc, MVMObject *HOW) {
 
 /* Initializes the resolver. */
 static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data) {
-#ifdef HAVE_WINDNS
-    /* TODO */
-#else
+#ifndef HAVE_WINDNS
     MVMResolverBody *body;
     ldns_status      status;
 
@@ -40,11 +38,14 @@ static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, voi
 
 /* Copies the body of one object to another. */
 static void copy_to(MVMThreadContext *tc, MVMSTable *st, void *src, MVMObject *dest_root, void *dest) {
-#ifdef HAVE_WINDNS
-    /* TODO */
-#else
     MVMResolverBody *src_body  = (MVMResolverBody *)src;
     MVMResolverBody *dest_body = (MVMResolverBody *)dest;
+#ifdef HAVE_WINDNS
+    if (src_body->name_servers) {
+        dest_body->name_servers = MVM_malloc(sizeof(DNS_ADDR_ARRAY));
+        memcpy(dest_body->name_servers, src_body->name_servers, sizeof(DNS_ADDR_ARRAY));
+    }
+#else
     if (!(dest_body->context = ldns_resolver_clone(src_body->context)))
         MVM_exception_throw_adhoc(tc,
             "Error copying a DNS resolver: %s",
@@ -80,14 +81,12 @@ static void deserialize_stable_size(MVMThreadContext *tc, MVMSTable *st, MVMSeri
 
 /* Called by the VM in order to free memory associated with this object. */
 static void gc_free(MVMThreadContext *tc, MVMObject *obj) {
-#ifdef HAVE_WINDNS
-    /* TODO */
-#else
     MVMResolverBody *body = (MVMResolverBody *)obj;
+#ifndef HAVE_WINDNS
     ldns_resolver_deep_free(body->context);
+#endif
     if (body->name_servers)
         MVM_free(body->name_servers);
-#endif
 }
 
 /* Composes the representation. */
@@ -95,28 +94,25 @@ static void compose(MVMThreadContext *tc, MVMSTable *st, MVMObject *info) {
     /* Nothing doing. */
 }
 
-/* Initializes the representation. */
 static MVMuint64 unmanaged_size(MVMThreadContext *tc, MVMSTable *st, void *data) {
-#ifdef HAVE_WINDNS
-    /* TODO */
-    return 0;
-#else
     MVMResolverBody *body = (MVMResolverBody *)data;
+#ifdef HAVE_WINDNS
+    MVMuint64        size = 0;
+    if (body->name_servers)
+        size += sizeof(DNS_ADDR_ARRAY) + body->name_servers->AddrCount * sizeof(DNS_ADDR);
+    return size;
+#else
     return sizeof(ldns_resolver) +
            body->name_servers_count * sizeof(MVMResolverIPAddress);
 #endif
 }
 
 static void describe_refs(MVMThreadContext *tc, MVMHeapSnapshotState *ss, MVMSTable *st, void *data) {
-#ifdef HAVE_WINDNS
-    /* TODO */
-#else
     static MVMuint64 buf_type_cache = 0;
 
     MVMResolverBody *body = (MVMResolverBody *)data;
     MVM_profile_heap_add_collectable_rel_const_cstr_cached(tc, ss,
         (MVMCollectable *)body->buf_type, "Buffer type", &buf_type_cache);
-#endif
 }
 
 const MVMREPROps * MVMResolver_initialize(MVMThreadContext *tc) {
@@ -161,12 +157,11 @@ static const MVMREPROps MVMResolver_this_repr = {
 void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
         MVMArray *name_servers, MVMuint16 default_port, MVMint64 tcp_only,
         MVMObject *buf_type) {
-#ifdef HAVE_WINDNS
-    /* TODO */
-#else /* HAVE_WINDNS */
-    size_t      name_servers_count;
     size_t      i;
+#ifndef HAVE_WINDNS
+    size_t      name_servers_count;
     ldns_status status;
+#endif
 
     /* Finish validating our objects: */
     if (STABLE(name_servers) != STABLE(tc->instance->boot_types.BOOTArray))
@@ -190,6 +185,33 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
     if (MVM_cas(&resolver->body.configured, 0, 1))
         MVM_exception_throw_adhoc(tc, "DNS resolvers cannot be reconfigured");
 
+#ifdef HAVE_WINDNS
+    if (name_servers->body.elems) {
+        size_t          i;
+        PDNS_ADDR_ARRAY windns_name_servers;
+
+        windns_name_servers           = resolver->body.name_servers = MVM_calloc(1, sizeof(DNS_ADDR_ARRAY));
+        windns_name_servers->MaxCount = windns_name_servers->AddrCount = name_servers->body.elems;
+        for (i = 0; i < name_servers->body.elems; ++i) {
+            MVMAddress           *address;
+            socklen_t             native_address_len;
+            MVMResolverIPAddress  native_address;
+
+            address            = (MVMAddress *)name_servers->body.slots.o[i];
+            native_address_len = MVM_address_get_storage_length(tc, &address->body.storage.any);
+            memcpy(&native_address, &address->body.storage, native_address_len);
+            if (native_address.any.sa_family == AF_INET6)
+                native_address.ip6.sin6_port = native_address.ip6.sin6_port || default_port;
+            else
+                native_address.ip4.sin_port = native_address.ip4.sin_port || default_port;
+            memcpy(windns_name_servers->AddrArray + i, &native_address, native_address_len);
+        }
+    }
+
+    resolver->body.query_flags = DNS_QUERY_WIRE_ONLY | DNS_QUERY_DISABLE_IDN_ENCODING;
+    if (tcp_only)
+        resolver->body.query_flags |= DNS_QUERY_USE_TCP_ONLY;
+#else
     /* Set our resolver's name servers list: */
     if ((name_servers_count = name_servers->body.elems)) {
         size_t name_servers_size;
@@ -236,8 +258,8 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
         ldns_resolver_set_fallback(resolver->body.context, 1);
         ldns_resolver_set_usevc(resolver->body.context, 0);
     }
+#endif /* HAVE_WINDNS */
 
     /* Set our resolver's buffer type: */
     MVM_ASSIGN_REF(tc, &(resolver->common.header), resolver->body.buf_type, buf_type);
-#endif /* HAVE_WINDNS */
 }

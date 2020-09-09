@@ -109,7 +109,12 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
 }
 
 #ifdef HAVE_WINDNS
-/* TODO */
+MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
+        MVMResolver *resolver, MVMObject *queue, MVMObject *schedulee,
+        MVMString *domain_name, MVMint64 type, MVMint64 class,
+        MVMObject *async_task) {
+    return tc->instance->VMNull;
+}
 #else /* HAVE_WINDNS */
 /* LDNS does not provide an asynchronous API for handling DNS queries. This
  * library can be made to work in combination with the I/O event loop through

@@ -57,7 +57,7 @@ MVM_STATIC_INLINE socklen_t MVM_address_get_storage_length(MVMThreadContext *tc,
         default:
             MVM_exception_throw_adhoc(tc,
                 "Unsupported native address family: %hhu",
-                address->sa_family);
+                socket_address->sa_family);
     }
 #endif
 }
