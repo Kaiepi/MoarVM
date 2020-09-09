@@ -5845,7 +5845,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
             OP(dnsconfigure): {
                 MVMObject *resolver     = GET_REG(cur_op, 0).o;
                 MVMObject *name_servers = GET_REG(cur_op, 2).o;
-                MVMObject *buf_type     = GET_REG(cur_op, 6).o;
+                MVMObject *buf_type     = GET_REG(cur_op, 8).o;
                 if (REPR(resolver)->ID != MVM_REPR_ID_MVMResolver || !IS_CONCRETE(resolver))
                     MVM_exception_throw_adhoc(tc,
                         "dnsconfigure requires a concrete object with REPR Resolver, got %s (%s)",
@@ -5860,9 +5860,9 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                         REPR(buf_type)->name, MVM_6model_get_debug_name(tc, buf_type));
                 else
                     MVM_resolver_configure(tc, (MVMResolver *)resolver,
-                        (MVMArray *)name_servers, (MVMuint16)GET_REG(cur_op, 4).i64,
+                        (MVMArray *)name_servers, (MVMuint16)GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).i64,
                         buf_type);
-                cur_op += 8;
+                cur_op += 10;
                 goto NEXT;
             }
             OP(asyncdnsquery): {

@@ -11736,7 +11736,7 @@ static const MVMOpInfo MVM_op_infos[] = {
     {
         MVM_OP_dnsconfigure,
         "dnsconfigure",
-        4,
+        5,
         1,
         0,
         0,
@@ -11745,7 +11745,7 @@ static const MVMOpInfo MVM_op_infos[] = {
         0,
         0,
         0,
-        { MVM_operand_read_reg | MVM_operand_obj, MVM_operand_read_reg | MVM_operand_obj, MVM_operand_read_reg | MVM_operand_int64, MVM_operand_read_reg | MVM_operand_obj }
+        { MVM_operand_read_reg | MVM_operand_obj, MVM_operand_read_reg | MVM_operand_obj, MVM_operand_read_reg | MVM_operand_int64, MVM_operand_read_reg | MVM_operand_int64, MVM_operand_read_reg | MVM_operand_obj }
     },
     {
         MVM_OP_asyncdnsquery,

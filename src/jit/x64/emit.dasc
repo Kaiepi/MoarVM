@@ -2584,7 +2584,8 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         MVMint16 resolver = ins->operands[0].reg.orig;
         MVMint16 name_servers = ins->operands[1].reg.orig;
         MVMint16 default_port = ins->operands[2].reg.orig;
-        MVMint16 buf_type = ins->operands[3].reg.orig;
+        MVMint16 tcp_only = ins->operands[3].reg.orig;
+        MVMint16 buf_type = ins->operands[4].reg.orig;
         /* if (REPR(resolver)->ID != MVM_REPR_ID_MVMResolver || !IS_CONCRETE(resolver)) */
         | mov ARG2, aword WORK[resolver];
         | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_MVMResolver;
@@ -2598,14 +2599,13 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         | test_type_object ARG3;
         | jnz >2;
         /* if (REPR(buf_type)->ID != MVM_REPR_ID_VMArray) */
-        | mov ARG5, aword WORK[buf_type];
+        | mov ARG6, aword WORK[buf_type];
         | cmp_repr_id ARG5, TMP3, MVM_REPR_ID_VMArray;
         | jne >3;
         /* Call MVM_io_dns_create_resolver: */
         | mov ARG1, TC;
-        | xor TMP4, TMP4;
-        | mov TMP4w, word WORK[default_port];
-        | mov ARG3, TMP2;
+        | movzx ARG4, word WORK[default_port];
+        | mov ARG5, qword WORK[tcp_only];
         | callp &MVM_resolver_configure;
         | jmp >4;
         |1:

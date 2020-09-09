@@ -842,7 +842,7 @@ BEGIN {
     2114,
     2116,
     2118,
-    2122);
+    2123);
     MAST::Ops.WHO<@counts> := nqp::list_i(0,
     2,
     2,
@@ -1681,7 +1681,7 @@ BEGIN {
     7,
     2,
     2,
-    4,
+    5,
     8);
     MAST::Ops.WHO<@values> := nqp::list_i(10,
     8,
@@ -3803,6 +3803,7 @@ BEGIN {
     65,
     65,
     65,
+    33,
     33,
     65,
     66,
@@ -11818,7 +11819,7 @@ BEGIN {
         my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
     },
-    'dnsconfigure', sub ($op0, $op1, $op2, $op3) {
+    'dnsconfigure', sub ($op0, $op1, $op2, $op3, $op4) {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
         nqp::writeuint($bytecode, $elems, 838, 5);
@@ -11826,6 +11827,7 @@ BEGIN {
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
         my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
         my uint $index3 := nqp::unbox_u($op3); nqp::writeuint($bytecode, nqp::add_i($elems, 8), $index3, 5);
+        my uint $index4 := nqp::unbox_u($op4); nqp::writeuint($bytecode, nqp::add_i($elems, 10), $index4, 5);
     },
     'asyncdnsquery', sub ($op0, $op1, $op2, $op3, $op4, $op5, $op6, $op7) {
         my $bytecode := $*MAST_FRAME.bytecode;
