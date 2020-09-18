@@ -73,21 +73,7 @@ our %TP_UV = (
     # the OS needs to provide a C<src> or C<objects> setting
 );
 
-our %TP_LDNS = (
-    name  => 'ldns',
-    path  => '3rdparty/ldns/lib',
-    rule  => 'cd 3rdparty/ldns && '
-           . 'libtoolize -ci && '
-           . 'autoreconf -fi && '
-           . 'CC=\'$(CC)\' CFLAGS=\'-fPIC\' ./configure ' . join(' ', qw(
-               --disable-shared
-               --disable-ldns-config
-               --without-pyldnsx
-               --without-ssl --disable-sha2 --disable-gost --disable-ecdsa --disable-ed25519 --disable-dane
-           )) . ' && '
-           . '$(MAKE)',
-    clean => 'cd 3rdparty/ldns && $(MAKE) distclean',
-);
+our %TP_LDNS = ();
 
 our %THIRDPARTY = (
     lao  => { %TP_LAO },

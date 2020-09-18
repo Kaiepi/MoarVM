@@ -19,20 +19,28 @@ static MVMObject * type_object_for(MVMThreadContext *tc, MVMObject *HOW) {
 
 /* Initializes the resolver. */
 static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, void *data) {
-#ifndef HAVE_WINDNS
     MVMResolverBody *body;
+#ifndef HAVE_WINDNS
     ldns_status      status;
+#endif
 
-    body = (MVMResolverBody *)data;
+    body              = (MVMResolverBody *)data;
+#ifdef HAVE_WINDNS
+    /* Some query flags must be set, but should not be configurable. Set those here: */
+    body->query_flags = DNS_QUERY_BYPASS_CACHE |
+                        DNS_QUERY_NO_LOCAL_NAME |
+                        DNS_QUERY_NO_HOSTS_FILE |
+                        DNS_QUERY_NO_NETBT |
+                        DNS_QUERY_WIRE_ONLY |
+                        DNS_QUERY_NO_MULTICAST |
+                        DNS_QUERY_TREAT_AS_FQDN | /* Disables searching. */
+                        DNS_QUERY_DONT_RESET_TTL_VALUES |
+                        DNS_QUERY_DISABLE_IDN_ENCODING;
+#else
     if ((status = ldns_resolver_new_frm_fp(&body->context, NULL)))
         MVM_exception_throw_adhoc(tc,
             "Error initializing a DNS resolver: %s",
             ldns_get_errorstr_by_id(status));
-    else {
-        /* We cannot configure EDNS fallbacks ourselves with WinDNS. This is
-         * enabled by default there, so enable it here too: */
-        ldns_resolver_set_fallback(body->context, 1);
-    }
 #endif
 }
 
@@ -51,7 +59,9 @@ static void copy_to(MVMThreadContext *tc, MVMSTable *st, void *src, MVMObject *d
             "Error copying a DNS resolver: %s",
             ldns_get_errorstr_by_id(LDNS_STATUS_MEM_ERR));
     else {
-        size_t name_servers_size = src_body->name_servers_count * sizeof(MVMResolverIPAddress);
+        size_t name_servers_size;
+
+        name_servers_size = src_body->name_servers_count * sizeof(MVMResolverIPAddress);
         dest_body->name_servers = MVM_malloc(name_servers_size);
         memcpy(dest_body->name_servers, src_body->name_servers, sizeof(name_servers_size));
 
@@ -158,8 +168,8 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
         MVMArray *name_servers, MVMuint16 default_port, MVMint64 tcp_only,
         MVMObject *buf_type) {
     size_t      i;
-#ifndef HAVE_WINDNS
     size_t      name_servers_count;
+#ifndef HAVE_WINDNS
     ldns_status status;
 #endif
 
@@ -167,7 +177,7 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
     if (STABLE(name_servers) != STABLE(tc->instance->boot_types.BOOTArray))
         MVM_exception_throw_adhoc(tc,
             "dnsconfigure name servers list must be an array of concrete IP addresses");
-    for (i = 0; i < name_servers->body.elems; ++i) {
+    else for (i = 0; i < name_servers->body.elems; ++i) {
         MVMObject *maybe_address = name_servers->body.slots.o[i];
         if (REPR(maybe_address)->ID != MVM_REPR_ID_MVMAddress || !IS_CONCRETE(maybe_address))
             MVM_exception_throw_adhoc(tc,
@@ -186,13 +196,13 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
         MVM_exception_throw_adhoc(tc, "DNS resolvers cannot be reconfigured");
 
 #ifdef HAVE_WINDNS
-    if (name_servers->body.elems) {
+    if ((name_servers_count = name_servers->body.elems)) {
         size_t          i;
-        PDNS_ADDR_ARRAY windns_name_servers;
+        PDNS_ADDR_ARRAY name_servers_windns;
 
-        windns_name_servers           = resolver->body.name_servers = MVM_calloc(1, sizeof(DNS_ADDR_ARRAY));
-        windns_name_servers->MaxCount = windns_name_servers->AddrCount = name_servers->body.elems;
-        for (i = 0; i < name_servers->body.elems; ++i) {
+        name_servers_windns           = resolver->body.name_servers = MVM_calloc(1, sizeof(DNS_ADDR_ARRAY));
+        name_servers_windns->MaxCount = name_servers_windns->AddrCount = name_servers_count;
+        for (i = 0; i < name_servers_count; ++i) {
             MVMAddress           *address;
             socklen_t             native_address_len;
             MVMResolverIPAddress  native_address;
@@ -200,24 +210,36 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
             address            = (MVMAddress *)name_servers->body.slots.o[i];
             native_address_len = MVM_address_get_storage_length(tc, &address->body.storage.any);
             memcpy(&native_address, &address->body.storage, native_address_len);
-            if (native_address.any.sa_family == AF_INET6)
-                native_address.ip6.sin6_port = native_address.ip6.sin6_port || default_port;
-            else
-                native_address.ip4.sin_port = native_address.ip4.sin_port || default_port;
-            memcpy(windns_name_servers->AddrArray + i, &native_address, native_address_len);
+            switch (native_address.any.sa_family) {
+                case AF_INET:
+                    native_address.ip4.sin_port = native_address.ip4.sin_port || default_port;
+                    break;
+                case AF_INET6:
+                    native_address.ip6.sin6_port = native_address.ip6.sin6_port || default_port;
+                    break;
+                default:
+                    MVM_oops(tc, "Memory corruption detected while configuring a DNS resolution context");
+                    break;
+            }
+            memcpy(name_servers_windns->AddrArray + i, &native_address, native_address_len);
         }
     }
+    else;
+        /* We want NULL to get passed to DnsQueryEx as the name servers list if
+           we're not configuring any of our own to allow system defaults to be
+           used. */
 
-    resolver->body.query_flags = DNS_QUERY_WIRE_ONLY | DNS_QUERY_DISABLE_IDN_ENCODING;
+    /* Set our resolver's TCP fallback configuration: */
     if (tcp_only)
         resolver->body.query_flags |= DNS_QUERY_USE_TCP_ONLY;
-#else
+#else /* HAVE_WINDNS */
     /* Set our resolver's name servers list: */
     if ((name_servers_count = name_servers->body.elems)) {
         size_t name_servers_size;
 
-        name_servers_size           = name_servers_count * sizeof(MVMResolverIPAddress);
-        resolver->body.name_servers = MVM_malloc(name_servers_size);
+        name_servers_size                 = name_servers_count * sizeof(MVMResolverIPAddress);
+        resolver->body.name_servers       = MVM_malloc(name_servers_size);
+        resolver->body.name_servers_count = name_servers_count;
         for (i = 0; i < name_servers_count; ++i) {
             MVMAddress            *address            = (MVMAddress *)name_servers->body.slots.o[i];
             const struct sockaddr *native_address     = &address->body.storage.any;
@@ -229,8 +251,9 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
         ldns_rdf **name_servers_ldns;
 
         /* Use the platform's configuration for DNS (as determined by LDNS): */
-        name_servers_ldns           = ldns_resolver_nameservers(resolver->body.context);
-        resolver->body.name_servers = MVM_malloc(name_servers_count * sizeof(MVMResolverIPAddress));
+        name_servers_ldns                 = ldns_resolver_nameservers(resolver->body.context);
+        resolver->body.name_servers       = MVM_malloc(name_servers_count * sizeof(MVMResolverIPAddress));
+        resolver->body.name_servers_count = name_servers_count;
         for (i = 0; i < name_servers_count; ++i) {
             ldns_rdf                *address_ldns;
             size_t                   native_address_len;
@@ -243,21 +266,17 @@ void MVM_resolver_configure(MVMThreadContext *tc, MVMResolver *resolver,
             MVM_free(native_address);
         }
     }
-    resolver->body.name_servers_count = name_servers_count;
+    else
+        MVM_exception_throw_adhoc(tc,
+            "No system configuration for DNS resolver name servers was found.");
 
     /* Set our resolver context's default port: */
     if (default_port)
         ldns_resolver_set_port(resolver->body.context, default_port);
 
     /* Set our resolver context's fallback method configuration: */
-    if (tcp_only) {
-        ldns_resolver_set_fallback(resolver->body.context, 0);
-        ldns_resolver_set_usevc(resolver->body.context, 1);
-    }
-    else {
-        ldns_resolver_set_fallback(resolver->body.context, 1);
-        ldns_resolver_set_usevc(resolver->body.context, 0);
-    }
+    ldns_resolver_set_fallback(resolver->body.context, !tcp_only);
+    ldns_resolver_set_usevc(resolver->body.context, !!tcp_only);
 #endif /* HAVE_WINDNS */
 
     /* Set our resolver's buffer type: */

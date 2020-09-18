@@ -109,11 +109,305 @@ MVMObject * MVM_io_dns_resolve(MVMThreadContext *tc,
 }
 
 #ifdef HAVE_WINDNS
+/* WinDNS is the simpler of our two libraries to implement DNS support with.
+   It offers a DnsQueryEx function for making queries given a domain name and
+   type (but no class, unfortunately), as well as a DnsCancelQuery function
+   for cancelling any pending query. */
+
+/* The set of arguments for DnsQueryEx: */
+typedef struct {
+    DNS_QUERY_REQUEST request;
+    DNS_QUERY_RESULT  response;
+    DNS_QUERY_CANCEL  cancellation;
+} QueryArgs;
+
+/* Information pertaining to an asynchronous DNS query: */
+typedef struct {
+    /* Information needed to make the query: */
+    MVMResolver *resolver;
+    MVMString   *domain_name;
+    MVMuint16    type;
+
+    /* Information needed to interact with the rest of MoarVM and libuv: */
+    MVMThreadContext *tc;
+    int               work_idx;
+
+    /* Information pertaining to the DNS query itself: */
+    wchar_t   *domain_name_wstr;
+    QueryArgs *query;
+} QueryInfo;
+
+/* Processes the response to a DNS query. */
+static VOID WINAPI query_process(PVOID data, PDNS_QUERY_RESULT result);
+
+/* Helpers for boxing and pushing RR data in query_process: */
+MVM_STATIC_INLINE void query_push_int(MVMThreadContext *tc, MVMObject *arr, MVMint64 x);
+MVM_STATIC_INLINE void query_push_domain_name(MVMThreadContext *tc, MVMObject *arr, const char *domain_name_cstr);
+MVM_STATIC_INLINE void query_push_ipv4_address(MVMThreadContext *tc, MVMObject *arr, IP4_ADDRESS address);
+MVM_STATIC_INLINE void query_push_buffer(MVMThreadContext *tc, MVMObject *arr,
+        MVMObject *buf_type, const MVMuint8 *buf_wire, size_t buf_size);
+
+/* Ends a query: */
+MVM_STATIC_INLINE void query_complete(QueryInfo *qi);
+/* Emits an error and ends the query task: */
+MVM_STATIC_INLINE void query_die(QueryInfo *qi, int error);
+
+static void query_setup(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
+    QueryInfo    *qi;
+    MVMAsyncTask *task;
+    MVMuint64     domain_name_csize;
+    char         *domain_name_cstr;
+    size_t        domain_name_wsize;
+    int           error;
+
+    /* Start our query task: */
+    qi           = (QueryInfo *)data;
+    qi->tc       = tc;
+    qi->work_idx = MVM_io_eventloop_add_active_work(tc, async_task);
+    task         = (MVMAsyncTask *)async_task;
+
+    /* Encode our domain name (making it fully-qualified in the process): */
+    domain_name_cstr                         = MVM_string_ascii_encode(tc, qi->domain_name, &domain_name_csize, 0);
+    domain_name_csize                       += 2;
+    domain_name_cstr                         = MVM_realloc(domain_name_cstr, domain_name_csize);
+    domain_name_cstr[domain_name_csize - 2]  = '.';
+    domain_name_cstr[domain_name_csize - 1]  = '\0';
+
+    if ((error = DnsValidateName_A(domain_name_cstr, DnsNameDomain)))
+        goto error;
+    else if (!(domain_name_wsize = MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED,
+                domain_name_cstr, domain_name_csize, NULL, 0)))
+        goto last_error;
+    else if (!MultiByteToWideChar(CP_ACP, MB_PRECOMPOSED,
+                domain_name_cstr, domain_name_csize,
+                (qi->domain_name_wstr = MVM_malloc(domain_name_wsize)), domain_name_wsize))
+        goto last_error;
+    else {
+        /* Set our query arguments: */
+        qi->query = MVM_calloc(1, sizeof(QueryArgs));
+
+        qi->query->request.Version                  = DNS_QUERY_REQUEST_VERSION1;
+        qi->query->request.QueryName                = qi->domain_name_wstr;
+        qi->query->request.QueryType                = qi->type;
+        qi->query->request.QueryOptions             = qi->resolver->body.query_flags;
+        qi->query->request.pDnsServerList           = qi->resolver->body.name_servers;
+        qi->query->request.pQueryCompletionCallback = query_process;
+        qi->query->request.pQueryContext            = qi;
+
+        qi->query->response.Version = DNS_QUERY_RESULTS_VERSION1;
+        /* The rest of response's members must be NULL. */
+
+        /* Finally, make the query: */
+        error = DnsQueryEx(&qi->query->request, &qi->query->response, &qi->query->cancellation);
+        if (error != DNS_REQUEST_PENDING)
+            goto error;
+        else
+            goto cleanup;
+    }
+
+last_error:
+    error = GetLastError();
+error:
+    assert(error);
+    query_die(qi, error);
+cleanup:
+    MVM_free(domain_name_cstr);
+}
+
+static VOID WINAPI query_process(PVOID data, PDNS_QUERY_RESULT response) {
+    QueryInfo        *qi;
+    MVMThreadContext *tc;
+    MVMAsyncTask     *task;
+
+    qi   = (QueryInfo *)data;
+    tc   = qi->tc;
+    task = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
+    if (response->QueryStatus)
+        query_die(qi, response->QueryStatus);
+    else {
+        /* Push our response: */
+        MVMROOT(tc, task, {
+            MVMObject *result = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+            MVM_repr_push_o(tc, result, task->body.schedulee);
+            /* Push a null error message: */
+            MVM_repr_push_o(tc, result, tc->instance->boot_types.BOOTStr);
+            MVMROOT(tc, result, {
+                /* Push the RRs from the response's answer section: */
+                PDNS_RECORDA rrs;
+                PDNS_RECORDA rr;
+
+                rrs = (PDNS_RECORDA)DnsRecordSetCopyEx(response->pQueryRecords, DnsCharSetUnicode, DnsCharSetAnsi);
+                for (rr = rrs; rr != NULL; rr = rr->pNext) {
+                    if (rr->Flags.S.Section == DnsSectionAnswer) {
+                        MVMObject *rr_box = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+                        MVMROOT(tc, rr_box, {
+                            /* Push the RR's type: */
+                            query_push_int(tc, rr_box, (MVMint64)rr->wType);
+                            /* Push the RR's class: */
+                            query_push_int(tc, rr_box, (MVMint64)DNS_CLASS_INTERNET);
+                            /* Push the RR's TTL: */
+                            query_push_int(tc, rr_box, (MVMint64)rr->dwTtl);
+                            /* Push the RR's domain name: */
+                            query_push_domain_name(tc, rr_box, rr->pName);
+                            /* Push the RR's data: */
+                            printf("%"PRIu16"\n", rr->wType);
+                            printf("%s\n", rr->Data.pDataPtr);
+                            switch (rr->wType) {
+                                case DNS_TYPE_A:
+                                    query_push_ipv4_address(tc, rr_box, rr->Data.A.IpAddress);
+                                    break;
+                                /* Fallbacks for response types we don't officially support (RFC 3597). */
+                                default:
+                                    /* XXX TODO: Should use UNKNOWN once we have more response types implemented. */
+                                    query_push_buffer(tc, rr_box,
+                                        qi->resolver->body.buf_type, (const MVMuint8 *)&rr->Data, rr->wDataLength);
+                                    break;
+                            }
+                        });
+                        /* Finally, push the RR itself to our result: */
+                        MVM_repr_push_o(tc, result, rr_box);
+                    }
+                }
+                DnsFree(rrs, DnsFreeRecordList);
+            });
+            MVM_repr_push_o(tc, task->body.queue, result);
+        });
+
+        query_complete(qi);
+    }
+}
+
+MVM_STATIC_INLINE void query_push_int(MVMThreadContext *tc, MVMObject *arr, MVMint64 x) {
+    MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, x));
+}
+
+MVM_STATIC_INLINE void query_push_domain_name(MVMThreadContext *tc, MVMObject *arr, const char *domain_name_cstr) {
+    MVMString *domain_name = MVM_string_ascii_decode_nt(tc, tc->instance->VMString, domain_name_cstr);
+    MVM_repr_push_o(tc, arr, MVM_repr_box_str(tc, tc->instance->boot_types.BOOTStr, domain_name));
+}
+
+MVM_STATIC_INLINE void query_push_ipv4_address(MVMThreadContext *tc, MVMObject *arr, IP4_ADDRESS address_windns) {
+    MVMAddress *address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    MVM_address_set_storage_length(tc, &address->body.storage.any, sizeof(struct sockaddr_in));
+    address->body.storage.ip4.sin_family      = AF_INET;
+    address->body.storage.ip4.sin_addr.s_addr = address_windns;
+    MVM_repr_push_o(tc, arr, (MVMObject *)address);
+}
+
+MVM_STATIC_INLINE void query_push_buffer(MVMThreadContext *tc, MVMObject *arr,
+        MVMObject *buf_type, const MVMuint8 *buf_wire, size_t buf_size) {
+    MVMArray *buf = (MVMArray *)MVM_repr_alloc_init(tc, buf_type);
+    buf->body.ssize    = buf->body.elems = buf_size;
+    buf->body.slots.u8 = MVM_malloc(buf_size);
+    memcpy(buf->body.slots.u8, buf_wire, buf_size);
+    MVM_repr_push_o(tc, arr, (MVMObject *)buf);
+}
+
+MVM_STATIC_INLINE void query_complete(QueryInfo *qi) {
+    MVM_io_eventloop_remove_active_work(qi->tc, &(qi->work_idx));
+    if (qi->query)
+        MVM_free_null(qi->query);
+}
+
+MVM_STATIC_INLINE void query_die(QueryInfo *qi, int error) {
+    MVMThreadContext *tc;
+    MVMAsyncTask     *task;
+    char             *errstr_cstr;
+    int               errstr_formatted;
+
+    tc               = qi->tc;
+    task             = MVM_io_eventloop_get_active_work(tc, qi->work_idx);
+    errstr_formatted = !!FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+        NULL, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+        (LPSTR)&errstr_cstr, 0, NULL);
+    if (!errstr_formatted)
+        errstr_cstr = strerror(GetLastError());
+
+    MVMROOT(tc, task, {
+        MVMObject *result = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVM_repr_push_o(tc, result, task->body.schedulee);
+        MVMROOT(tc, result, {
+            /* Push our error message: */
+            MVMString *errstr = MVM_string_ascii_decode_nt(tc, tc->instance->VMString, errstr_cstr);
+            MVM_repr_push_o(tc, result, MVM_repr_box_str(tc, tc->instance->boot_types.BOOTStr, errstr));
+        });
+        MVM_repr_push_o(tc, task->body.queue, result);
+    });
+    query_complete(qi);
+
+    if (errstr_formatted)
+        MVM_free(errstr_cstr);
+}
+
+static void query_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
+    if (data) {
+        QueryInfo *qi = (QueryInfo *)data;
+        if (qi->query) {
+            int error = DnsCancelQuery(&qi->query->cancellation);
+            if (error)
+                query_die(qi, error);
+            else
+                query_complete(qi);
+        }
+    }
+}
+
+static void query_gc_mark(MVMThreadContext *tc, void *data, MVMGCWorklist *worklist) {
+    QueryInfo *qi = (QueryInfo *)data;
+    MVM_gc_worklist_add(tc, worklist, &(qi->resolver));
+    MVM_gc_worklist_add(tc, worklist, &(qi->domain_name));
+}
+
+static void query_gc_free(MVMThreadContext *tc, MVMObject *async_task, void *data) {
+    if (data) {
+        QueryInfo *qi = (QueryInfo *)data;
+        if (qi->domain_name_wstr)
+            MVM_free(qi->domain_name_wstr);
+        if (qi->query)
+            MVM_free(qi->query);
+        MVM_free(qi);
+    }
+}
+
+static const MVMAsyncTaskOps query_op_table = {
+    query_setup,
+    NULL, /* permit */
+    query_cancel,
+    query_gc_mark,
+    query_gc_free,
+};
+
 MVMObject * MVM_io_dns_query_async(MVMThreadContext *tc,
         MVMResolver *resolver, MVMObject *queue, MVMObject *schedulee,
         MVMString *domain_name, MVMint64 type, MVMint64 class,
         MVMObject *async_task) {
-    return tc->instance->VMNull;
+    MVMAsyncTask *task;
+    QueryInfo    *qi;
+
+    /* Ensure our resolver is set up for queries: */
+    if (!MVM_load(&resolver->body.configured))
+        MVM_exception_throw_adhoc(tc,
+            "DNS resolvers must be configured before queries can be made with them");
+
+    /* Create our async task handle: */
+    MVMROOT5(tc, resolver, queue, schedulee, domain_name, async_task, {
+        task = (MVMAsyncTask *)MVM_repr_alloc_init(tc, async_task);
+    });
+    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.queue, queue);
+    MVM_ASSIGN_REF(tc, &(task->common.header), task->body.schedulee, schedulee);
+    task->body.ops  = &query_op_table;
+    qi              = MVM_calloc(1, sizeof(QueryInfo));
+    MVM_ASSIGN_REF(tc, &(task->common.header), qi->resolver, resolver);
+    MVM_ASSIGN_REF(tc, &(task->common.header), qi->domain_name, domain_name);
+    qi->type        = (MVMuint16)type;
+    task->body.data = qi;
+
+    /* Hand the task off to the event loop: */
+    MVMROOT2(tc, domain_name, async_task, {
+        MVM_io_eventloop_queue_work(tc, (MVMObject *)task);
+    });
+
+    return (MVMObject *)task;
 }
 #else /* HAVE_WINDNS */
 /* LDNS does not provide an asynchronous API for handling DNS queries. This
@@ -693,6 +987,9 @@ static void query_free_handle(uv_handle_t *handle) {
 
 static void query_cancel(MVMThreadContext *tc, uv_loop_t *loop, MVMObject *async_task, void *data) {
     if (data) {
+        /* Cancelling a query is handled by closing whichever of its handles is
+           open and removing its async task; the same thing we already do when
+           marking a query as complete, really. */
         QueryInfo *qi = (QueryInfo *)data;
         query_complete(qi);
     }

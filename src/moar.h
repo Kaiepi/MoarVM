@@ -38,9 +38,22 @@
 #include <dyncall_callback.h>
 #endif
 
-/* DNS (WinDNS on Windows by default, LDNS otherwise) */
+/* DNS libraries (WinDNS on Windows by default, LDNS otherwise) */
 #ifdef HAVE_WINDNS
+/* windns.h doesn't expose the domain name validation functions in a way that
+   makes it possible for them to get linked! This is cribbed from
+   https://www.sql.ru/forum/469050/dnsvalidatename. */
+#define DnsValidateName_A    __invalid_DnsValidateName_A
+#define DnsValidateName_W    __invalid_DnsValidateName_W
+#define DnsValidateName_UTF8 __invalid_DnsValidateName_UTF8
 #include <windns.h>
+#undef DnsValidateName_A
+#undef DnsValidateName_W
+#undef DnsValidateName_UTF8
+
+MVM_DLL_IMPORT DNS_STATUS WINAPI DnsValidateName_A(IN PCSTR pszName, IN DNS_NAME_FORMAT Format);
+MVM_DLL_IMPORT DNS_STATUS WINAPI DnsValidateName_W(IN PCWSTR pszName, IN DNS_NAME_FORMAT Format);
+MVM_DLL_IMPORT DNS_STATUS WINAPI DnsValidateName_UTF8(IN PCSTR pszName, IN DNS_NAME_FORMAT Format);
 #else
 #include <ldns/ldns.h>
 #endif
