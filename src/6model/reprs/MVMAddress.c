@@ -357,7 +357,7 @@ MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
 #endif
         default:
             MVM_exception_throw_adhoc(tc,
-                "Unsupported native address family: %hhu",
+                "Unsupported native address family: %hu",
                 address->body.storage.any.sa_family);
             break;
     }
@@ -560,7 +560,9 @@ MVMObject * MVM_address_to_buf(MVMThreadContext *tc, MVMAddress *address, MVMArr
         }
 #endif
         default:
-            MVM_exception_throw_adhoc(tc, "Unknown native address family: %hhu", address->body.storage.any.sa_family);
+            MVM_exception_throw_adhoc(tc,
+                "Unknown native address family: %hu",
+                address->body.storage.any.sa_family);
     }
 
     return (MVMObject *)buf;

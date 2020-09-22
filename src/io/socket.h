@@ -38,7 +38,7 @@ MVM_STATIC_INLINE const MVMSocketFamily * MVM_io_socket_native_family(MVMThreadC
         if (family->native == native)
             return family;
     }
-    MVM_exception_throw_adhoc(tc, "Unsupported native socket family: %hhu", native);
+    MVM_exception_throw_adhoc(tc, "Unsupported native socket family: %hu", native);
 }
 
 struct MVMSocketType {

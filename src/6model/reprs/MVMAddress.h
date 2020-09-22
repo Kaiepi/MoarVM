@@ -1,16 +1,13 @@
-#ifdef _MSC_VER
+#ifdef _WIN32
 typedef ULONG  in_addr_t;
 typedef USHORT in_port_t;
 typedef USHORT sa_family_t;
 #else
-#  define MVM_HAS_SOCKADDR_LEN
-#endif
-
-#ifndef _WIN32
 #  include <sys/un.h>
 
 #  define MVM_HAS_AF_UNIX
 #  define MVM_SOCKADDR_UN_PATH_SIZE sizeof(((struct sockaddr_un *)NULL)->sun_path)
+#  define MVM_HAS_SOCKADDR_LEN
 #endif
 
 /* Representation used by VM-level network addresses. */
@@ -56,7 +53,7 @@ MVM_STATIC_INLINE socklen_t MVM_address_get_storage_length(MVMThreadContext *tc,
 #  endif
         default:
             MVM_exception_throw_adhoc(tc,
-                "Unsupported native address family: %hhu",
+                "Unsupported native address family: %hu",
                 socket_address->sa_family);
     }
 #endif

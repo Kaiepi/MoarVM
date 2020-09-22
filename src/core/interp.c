@@ -4719,7 +4719,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 2;
                 goto NEXT;
             OP(setthreadname):
-                MVM_thread_set_self_name(tc, GET_REG(cur_op, 0).s); 
+                MVM_thread_set_self_name(tc, GET_REG(cur_op, 0).s);
                 cur_op += 2;
                 goto NEXT;
             OP(atpos2d_i):
@@ -5880,7 +5880,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     GET_REG(cur_op, 0).o = MVM_io_dns_query_async(tc,
                         (MVMResolver *)resolver, GET_REG(cur_op, 4).o, GET_REG(cur_op, 6).o,
                         GET_REG(cur_op, 8).s, GET_REG(cur_op, 10).i64, GET_REG(cur_op, 12).i64,
-                        GET_REG(cur_op, 14).o);
+                        async_task);
                 cur_op += 16;
                 goto NEXT;
             }
