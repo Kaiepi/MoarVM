@@ -21,6 +21,9 @@
 /* platform-specific setjmp override */
 #include <platform/setjmp.h>
 
+/* Socket types required to define the Address REPR. */
+#include "platform/socket.h"
+
 /* libuv
  * must precede atomic_ops.h so we get the ordering of Winapi headers right
  */
