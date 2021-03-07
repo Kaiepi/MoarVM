@@ -132,6 +132,7 @@ OBJECTS1 = src/core/callsite@obj@ \
           src/io/io@obj@ \
           src/io/eventloop@obj@ \
           src/io/syncfile@obj@ \
+          src/io/address@obj@ \
           src/io/syncsocket@obj@ \
           src/io/fileops@obj@ \
           src/io/dirops@obj@ \
@@ -302,6 +303,7 @@ HEADERS = src/moar.h \
           src/io/io.h \
           src/io/eventloop.h \
           src/io/syncfile.h \
+          src/io/address.h \
           src/io/syncsocket.h \
           src/io/fileops.h \
           src/io/dirops.h \
