@@ -566,6 +566,7 @@ if ($^O eq 'aix') {
         if $config{arch_bits} == 32;
 }
 build::probe::rdtscp(\%config, \%defaults);
+build::probe::sa_len(\%config, \%defaults);
 
 my $order = $config{be} ? 'big endian' : 'little endian';
 

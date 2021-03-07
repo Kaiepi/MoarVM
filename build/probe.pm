@@ -807,6 +807,30 @@ sub win32_compiler_toolchain {
     $config->{win32_compiler_toolchain}
 }
 
+sub sa_len {
+    my ($config) = @_;
+    my $restore = _to_probe_dir();
+    _spew('try.c', <<"EOT");
+#include <stdlib.h>
+#ifdef _WIN32
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+#else
+#  include <sys/socket.h>
+#  include <netinet/in.h>
+#endif
+
+int main(int argc, char **argv) {
+    return !sizeof(((struct sockaddr *)NULL)->sa_len);
+}
+EOT
+
+    print ::dots('    probing existence of socket address length members');
+    my $can = compile($config, 'try');
+    print $can ? "YES\n": "NO\n";
+    $config->{has_sa_len} = $can || 0
+}
+
 sub rdtscp {
     my ($config) = @_;
     my $restore = _to_probe_dir();
