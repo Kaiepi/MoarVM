@@ -2676,6 +2676,13 @@
         $disp)
       (^vmnull))))
 
+(template: addrfromstr_ip4
+  (call (^func &MVM_address_from_ipv4_presentation)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1 ptr)
+      (carg $2 int)) ptr_sz))
+
 (macro: ^deopt_one (,deopt_idx)
   (dov (callv (^func MVM_spesh_deopt_one) (arglist (carg (tc) ptr) (carg ,deopt_idx int))) (^exit)))
 
