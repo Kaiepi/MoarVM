@@ -887,6 +887,7 @@ nextdispatcherfor   r(obj) r(obj)
 takenextdispatcher  w(obj) :noinline
 time                w(uint64) :pure :confprog
 addrfromstr_ip4     w(obj) r(str) r(int64) :pure
+addrfromstr_ip6     w(obj) r(str) r(int64) r(str) :pure
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.
