@@ -2472,6 +2472,25 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         | mov qword WORK[result], RV;
         break;
     }
+    case MVM_OP_getaddrscopeid: {
+        MVMint16 result = ins->operands[0].reg.orig;
+        MVMint16 address = ins->operands[1].reg.orig;
+        | mov ARG2, aword WORK[address];
+        /* Is this an address? */
+        | cmp_repr_id ARG2, TMP1, MVM_REPR_ID_MVMAddress;
+        | jne >1;
+        | test_type_object ARG2;
+        | jz >2;
+        /* If not, throw. */
+        |1:
+        | throw_adhoc "getaddrscopeid requires a concrete MVMAddress";
+        /* If so, get its scope ID. */
+        |2:
+        | mov ARG1, TC;
+        | callp &MVM_address_get_scope_id;
+        | mov WORK[result], RV;
+        break;
+    }
     case MVM_OP_sp_fastbox_i:
     case MVM_OP_sp_fastbox_i_ic:
     case MVM_OP_sp_fastbox_bi:
