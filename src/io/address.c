@@ -121,3 +121,14 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
     MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
 #endif
 }
+
+MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
+    switch (MVM_address_get_family(&address->body)) {
+        case AF_INET:
+            return ntohs(address->body.storage.sin.sin_port);
+        case AF_INET6:
+            return ntohs(address->body.storage.sin6.sin6_port);
+        default:
+            MVM_exception_throw_adhoc(tc, "Can only get the port of an IP address");
+    }
+}
