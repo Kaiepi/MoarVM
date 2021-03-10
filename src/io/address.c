@@ -132,3 +132,10 @@ MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
             MVM_exception_throw_adhoc(tc, "Can only get the port of an IP address");
     }
 }
+
+MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address) {
+    if (MVM_address_get_family(&address->body) == AF_INET6)
+        return address->body.storage.sin6.sin6_scope_id;
+    else
+        MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
+}

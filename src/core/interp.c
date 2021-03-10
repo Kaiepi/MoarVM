@@ -5747,6 +5747,16 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 4;
                 goto NEXT;
             }
+            OP(getaddrscopeid): {
+                MVMObject *address = GET_REG(cur_op, 2).o;
+                if (REPR(address)->ID != MVM_REPR_ID_MVMAddress || !IS_CONCRETE(address))
+                    MVM_exception_throw_adhoc(tc,
+                        "getaddrscopeid requires a concrete object of REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                GET_REG(cur_op, 0).i64 = (MVMint64)MVM_address_get_scope_id(tc, (MVMAddress *)address);
+                cur_op += 4;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;
