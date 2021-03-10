@@ -89,3 +89,35 @@ zone_error:
         "not a network interface name or index",
         presentation_cstr, zone_id_cstr);
 }
+
+MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
+#ifdef MVM_HAS_PF_UNIX
+    MVMuint64           path_len;
+    char               *path_cstr;
+    struct sockaddr_un  socket_address;
+    MVMAddress         *address;
+
+    path_cstr = MVM_string_utf8_encode(tc, path, &path_len, 0);
+    if (path_len >= MVM_SUN_PATH_SIZE) {
+        MVM_free(path_cstr);
+        MVM_exception_throw_adhoc(tc,
+            "UNIX socket address path is too long (max length supported by this platform is %zu characters)",
+            MVM_SUN_PATH_SIZE - 1);
+    }
+    else {
+        socket_address.sun_family = AF_UNIX;
+        memcpy(socket_address.sun_path, path_cstr, path_len);
+        MVM_free(path_cstr);
+    }
+
+    MVMROOT(tc, path, {
+        MVMuint8 socket_address_size = sizeof(socket_address) - MVM_SUN_PATH_SIZE + path_len;
+        address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+        memcpy(&address->body.storage, &socket_address, socket_address_size);
+        MVM_address_set_length(&address->body, socket_address_size);
+    });
+    return (MVMObject *)address;
+#else
+    MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#endif
+}
