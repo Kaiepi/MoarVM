@@ -892,6 +892,7 @@ addrfromstr_un      w(obj) r(str) :pure
 getaddrport         w(int64) r(obj) :pure
 getaddrscopeid      w(int64) r(obj) :pure
 addrtostr           w(str) r(obj) :pure
+addrfrombuf_ip4     w(obj) r(obj) r(int64) :pure
 
 # Spesh ops. Naming convention: start with sp_. Must all be marked .s, which
 # is how the validator knows to exclude them.

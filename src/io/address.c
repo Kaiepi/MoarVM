@@ -7,6 +7,19 @@
 #include <net/if.h>
 #endif
 
+MVM_STATIC_INLINE void memcpy_swap(void *dst, const void *src, const size_t elems, const size_t size) {
+#ifdef MVM_BIGENDIAN
+    memcpy(dst, src, size * elems);
+#else
+    size_t i, l, r;
+    for (i = 0; i < elems; ++i)
+        for (l = i * size, r = l + size; l < r--; ++l) {
+            ((char *)dst)[l] = ((const char *)src)[r];
+            ((char *)dst)[r] = ((const char *)src)[l];
+        }
+#endif
+}
+
 MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc, MVMString *presentation, MVMuint16 port) {
     char               *presentation_cstr;
     struct sockaddr_in  socket_address;
@@ -120,6 +133,41 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
 #else
     MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
 #endif
+}
+
+MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *buf, MVMuint16 port) {
+    MVMArrayREPRData   *repr_data;
+    MVMAddress         *address;
+    struct sockaddr_in *socket_address;
+
+    repr_data = (MVMArrayREPRData *)STABLE(buf)->REPR_data;
+    switch (repr_data->slot_type) {
+        case MVM_ARRAY_U8:
+            if (buf->body.elems != 4)
+                MVM_exception_throw_adhoc(tc, "IPv4 address uint8 buffer must have 4 elements");
+            break;
+        case MVM_ARRAY_U16:
+            if (buf->body.elems != 2)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint16 buffer must have 2 elements");
+            break;
+        case MVM_ARRAY_U32:
+            if (buf->body.elems != 1)
+                MVM_exception_throw_adhoc(tc, "IPv4 address uint32 buffer must have 1 element");
+            break;
+        default:
+            MVM_exception_throw_adhoc(tc, "IPv4 address buffer must be an array of uint8, uint16, or uint32");
+            break;
+    }
+
+    MVMROOT(tc, buf, {
+        address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    });
+    socket_address             = &address->body.storage.sin;
+    socket_address->sin_family = AF_INET;
+    socket_address->sin_port   = htons(port);
+    memcpy_swap(&socket_address->sin_addr, buf->body.slots.u8, buf->body.elems, repr_data->elem_size);
+    MVM_address_set_length(&address->body, sizeof(*socket_address));
+    return (MVMObject *)address;
 }
 
 MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
