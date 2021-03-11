@@ -139,3 +139,57 @@ MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address) {
     else
         MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
 }
+
+MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
+    sa_family_t  family;
+    MVMString   *address_str;
+    switch (family = MVM_address_get_family(&address->body)) {
+        case AF_INET: {
+            char address_cstr[INET_ADDRSTRLEN];
+            int  error;
+
+            if ((error = uv_inet_ntop(AF_INET,
+                    &address->body.storage.sin.sin_addr, address_cstr, sizeof(address_cstr))))
+                MVM_exception_throw_adhoc(tc,
+                    "Error creating an IPv4 address presentation-format string: %s",
+                    uv_strerror(error));
+            else {
+                MVMROOT(tc, address, {
+                    address_str = MVM_string_utf8_decode(tc, tc->instance->VMString,
+                        address_cstr, strnlen(address_cstr, sizeof(address_cstr) - 1));
+                });
+            }
+            break;
+        }
+        case AF_INET6: {
+            char address_cstr[INET6_ADDRSTRLEN];
+            int  error;
+
+            if ((error = uv_inet_ntop(AF_INET6,
+                    &address->body.storage.sin6.sin6_addr, address_cstr, sizeof(address_cstr))))
+                MVM_exception_throw_adhoc(tc,
+                    "Error creating an IPv6 address presentation-format string: %s",
+                    uv_strerror(error));
+            else {
+                MVMROOT(tc, address, {
+                    address_str = MVM_string_utf8_decode(tc, tc->instance->VMString,
+                        address_cstr, strnlen(address_cstr, sizeof(address_cstr) - 1));
+                });
+            }
+            break;
+        }
+#ifdef MVM_HAS_PF_UNIX
+        case AF_UNIX:
+            MVMROOT(tc, address, {
+                address_str = MVM_string_utf8_c8_decode(tc, tc->instance->VMString, address->body.storage.sun.sun_path,
+                    MVM_address_get_length(&address->body) - sizeof(struct sockaddr_un) + MVM_SUN_PATH_SIZE);
+            });
+            break;
+#endif
+        default:
+            MVM_exception_throw_adhoc(tc, "Unsupported native address family: %hu", family);
+            break;
+    }
+
+    return address_str;
+}

@@ -833,7 +833,8 @@ BEGIN {
     2086,
     2090,
     2092,
-    2094);
+    2094,
+    2096);
     MAST::Ops.WHO<@counts> := nqp::list_i(0,
     2,
     2,
@@ -1662,6 +1663,7 @@ BEGIN {
     1,
     3,
     4,
+    2,
     2,
     2,
     2);
@@ -3760,6 +3762,8 @@ BEGIN {
     34,
     65,
     34,
+    65,
+    58,
     65);
     MAST::Ops.WHO<%codes> := nqp::hash('no_op', 0,
     'const_i8', 1,
@@ -4591,7 +4595,8 @@ BEGIN {
     'addrfromstr_ip6', 827,
     'addrfromstr_un', 828,
     'getaddrport', 829,
-    'getaddrscopeid', 830);
+    'getaddrscopeid', 830,
+    'addrtostr', 831);
     MAST::Ops.WHO<@names> := nqp::list_s('no_op',
     'const_i8',
     'const_i16',
@@ -5422,7 +5427,8 @@ BEGIN {
     'addrfromstr_ip6',
     'addrfromstr_un',
     'getaddrport',
-    'getaddrscopeid');
+    'getaddrscopeid',
+    'addrtostr');
     MAST::Ops.WHO<%generators> := nqp::hash('no_op', sub () {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
@@ -11688,6 +11694,13 @@ BEGIN {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
         nqp::writeuint($bytecode, $elems, 830, 5);
+        my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
+        my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
+    },
+    'addrtostr', sub ($op0, $op1) {
+        my $bytecode := $*MAST_FRAME.bytecode;
+        my uint $elems := nqp::elems($bytecode);
+        nqp::writeuint($bytecode, $elems, 831, 5);
         my uint $index0 := nqp::unbox_u($op0); nqp::writeuint($bytecode, nqp::add_i($elems, 2), $index0, 5);
         my uint $index1 := nqp::unbox_u($op1); nqp::writeuint($bytecode, nqp::add_i($elems, 4), $index1, 5);
     });

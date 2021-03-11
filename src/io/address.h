@@ -5,3 +5,5 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path);
 
 MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address);
 MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address);
+
+MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address);
