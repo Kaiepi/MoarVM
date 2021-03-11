@@ -143,6 +143,7 @@ MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address) {
 MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
     sa_family_t  family;
     MVMString   *address_str;
+
     switch (family = MVM_address_get_family(&address->body)) {
         case AF_INET: {
             char address_cstr[INET_ADDRSTRLEN];

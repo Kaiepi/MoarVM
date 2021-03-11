@@ -1921,6 +1921,7 @@ start:
     case MVM_OP_hllbool:
     case MVM_OP_getaddrport:
     case MVM_OP_getaddrscopeid:
+    case MVM_OP_addrtostr:
         /* Profiling */
     case MVM_OP_prof_enterspesh:
     case MVM_OP_prof_enterinline:
