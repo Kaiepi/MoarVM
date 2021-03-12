@@ -232,6 +232,33 @@ zone_error:
         zone_id_cstr);
 }
 
+MVMObject * MVM_address_from_unix_address(MVMThreadContext *tc, MVMArray *buf) {
+#ifdef MVM_HAS_PF_UNIX
+    MVMArrayREPRData *repr_data = (MVMArrayREPRData *)STABLE(buf)->REPR_data;
+    if (repr_data->slot_type != MVM_ARRAY_I8 && repr_data->slot_type != MVM_ARRAY_U8)
+        MVM_exception_throw_adhoc(tc, "UNIX socket address buffer must be an array of int8 or uint8");
+    else if (buf->body.elems > MVM_SUN_PATH_SIZE)
+        MVM_exception_throw_adhoc(tc,
+            "UNIX socket address buffer is too long (max size supported by this platform is %zu characters)",
+            MVM_SUN_PATH_SIZE);
+    else {
+        MVMAddress         *address;
+        struct sockaddr_un *socket_address;
+
+        MVMROOT(tc, buf, {
+            address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+        });
+        socket_address             = &address->body.storage.sun;
+        socket_address->sun_family = AF_UNIX;
+        memcpy(socket_address->sun_path, buf->body.slots.i8, buf->body.elems);
+        MVM_address_set_length(&address->body, sizeof(*socket_address) - MVM_SUN_PATH_SIZE + buf->body.elems);
+        return (MVMObject *)address;
+    }
+#else
+    MVM_exception_throw_adhoc(tc, "UNIX sockets are not supported by MoarVM on this platform");
+#endif
+}
+
 MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
     switch (MVM_address_get_family(&address->body)) {
         case AF_INET:
