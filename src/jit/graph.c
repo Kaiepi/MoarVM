@@ -1922,6 +1922,7 @@ start:
     case MVM_OP_getaddrport:
     case MVM_OP_getaddrscopeid:
     case MVM_OP_addrtostr:
+    case MVM_OP_addrfrombuf_ip4:
         /* Profiling */
     case MVM_OP_prof_enterspesh:
     case MVM_OP_prof_enterinline:
