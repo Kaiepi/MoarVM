@@ -170,6 +170,68 @@ MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *buf, M
     return (MVMObject *)address;
 }
 
+MVMObject * MVM_address_from_ipv6_address(MVMThreadContext *tc, MVMArray *buf, MVMuint16 port, MVMString *zone_id) {
+    MVMArrayREPRData    *repr_data;
+    MVMAddress          *address;
+    struct sockaddr_in6 *socket_address;
+    char                *zone_id_cstr;
+
+    repr_data = (MVMArrayREPRData *)STABLE(buf)->REPR_data;
+    switch (repr_data->slot_type) {
+        case MVM_ARRAY_U8:
+            if (buf->body.elems != 16)
+                MVM_exception_throw_adhoc(tc, "IPv4 address uint8 buffer must have 16 elements");
+            break;
+        case MVM_ARRAY_U16:
+            if (buf->body.elems != 8)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint16 buffer must have 8 elements");
+            break;
+        case MVM_ARRAY_U32:
+            if (buf->body.elems != 4)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint32 buffer must have 4 elements");
+            break;
+        case MVM_ARRAY_U64:
+            if (buf->body.elems != 2)
+                MVM_exception_throw_adhoc(tc, "IPv6 address uint64 buffer must have 2 elements");
+            break;
+        default:
+            MVM_exception_throw_adhoc(tc, "IPv6 address buffer must be an array of uint8, uint16, uint32, or uint64");
+            break;
+    }
+
+    MVMROOT(tc, buf, {
+        address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    });
+    socket_address              = &address->body.storage.sin6;
+    socket_address->sin6_family = AF_INET6;
+    socket_address->sin6_port   = htons(port);
+    if (zone_id) {
+        zone_id_cstr = MVM_string_utf8_encode_C_string(tc, zone_id);
+        if (!(socket_address->sin6_scope_id = if_nametoindex(zone_id_cstr))) {
+#ifdef _MSC_VER
+            socket_address->sin6_scope_id = strtoul(zone_id_cstr, zone_id_cstr + strlen(zone_id_cstr), 0);
+            if (errno)
+                goto zone_error;
+#else
+            const char *error_cstr = NULL;
+            socket_address->sin6_scope_id = strtonum(zone_id_cstr, 0, UINT32_MAX, &error_cstr);
+            if (error_cstr)
+                goto zone_error;
+#endif
+        }
+        MVM_free(zone_id_cstr);
+    }
+    memcpy_swap(&socket_address->sin6_addr, buf->body.slots.u8, buf->body.elems, repr_data->elem_size);
+    MVM_address_set_length(&address->body, sizeof(*socket_address));
+    return (MVMObject *)address;
+
+zone_error:
+    MVM_exception_throw_adhoc_free(tc, (char * []){ zone_id_cstr, NULL },
+        "Error creating an IPv6 address from buffer with zone ID ('%s'): "
+        "not a network interface name or index",
+        zone_id_cstr);
+}
+
 MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
     switch (MVM_address_get_family(&address->body)) {
         case AF_INET:

@@ -5778,6 +5778,17 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 6;
                 goto NEXT;
             }
+            OP(addrfrombuf_ip6): {
+                MVMObject *buf = GET_REG(cur_op, 2).o;
+                if (REPR(buf)->ID != MVM_REPR_ID_VMArray || !IS_CONCRETE(buf))
+                    MVM_exception_throw_adhoc(tc,
+                        "addrfrombuf_ip6 requires a concrete object of REPR VMArray, got %s (%s)",
+                        REPR(buf)->name, MVM_6model_get_debug_name(tc, buf));
+                GET_REG(cur_op, 0).o = MVM_address_from_ipv6_address(tc,
+                    (MVMArray *)buf, (MVMuint16)GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).s);
+                cur_op += 8;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;
