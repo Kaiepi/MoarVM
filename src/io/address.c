@@ -331,3 +331,79 @@ MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
 
     return address_str;
 }
+
+MVMObject * MVM_address_to_buffer(MVMThreadContext *tc, MVMAddress *address, MVMArray *buf_type) {
+    MVMArrayREPRData *repr_data;
+    sa_family_t       family;
+    MVMArray         *buf;
+
+    repr_data = (MVMArrayREPRData *)STABLE(buf_type)->REPR_data;
+    switch (family = MVM_address_get_family(&address->body)) {
+        case AF_INET: {
+            switch (repr_data->slot_type) {
+                case MVM_ARRAY_U8:
+                case MVM_ARRAY_U16:
+                case MVM_ARRAY_U32:
+                    MVMROOT2(tc, address, buf_type, {
+                        buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
+                        buf->body.start    = 0;
+                        buf->body.ssize    = buf->body.elems = 4 / repr_data->elem_size;
+                        buf->body.slots.u8 = MVM_malloc(4);
+                        memcpy_swap(buf->body.slots.u8, &address->body.storage.sin.sin_addr,
+                            buf->body.elems, repr_data->elem_size);
+                    });
+                    break;
+                default:
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtobuf buffer type must be an array of uint8, uint16, or uint32");
+            }
+            break;
+        }
+        case AF_INET6: {
+            switch (repr_data->slot_type) {
+                case MVM_ARRAY_U8:
+                case MVM_ARRAY_U16:
+                case MVM_ARRAY_U32:
+                case MVM_ARRAY_U64:
+                    MVMROOT2(tc, address, buf_type, {
+                        buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
+                        buf->body.start    = 0;
+                        buf->body.ssize    = buf->body.elems = 16 / repr_data->elem_size;
+                        buf->body.slots.u8 = MVM_malloc(16);
+                        memcpy_swap(buf->body.slots.u8, &address->body.storage.sin6.sin6_addr,
+                            buf->body.elems, repr_data->elem_size);
+                    });
+                    break;
+                default:
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtobuf buffer type must be an array of uint8, uint16, uint32, or uint64");
+            }
+            break;
+        }
+#ifdef MVM_HAS_PF_UNIX
+        case AF_UNIX: {
+            switch (repr_data->slot_type) {
+                case MVM_ARRAY_I8:
+                case MVM_ARRAY_U8:
+                    MVMROOT2(tc, address, buf_type, {
+                        buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
+                        buf->body.start    = 0;
+                        buf->body.ssize    = buf->body.elems =
+                            MVM_address_get_length(&address->body) - sizeof(struct sockaddr_un) + MVM_SUN_PATH_SIZE;
+                        buf->body.slots.i8 = MVM_malloc(buf->body.ssize);
+                        memcpy(buf->body.slots.i8, address->body.storage.sun.sun_path, buf->body.ssize);
+                    });
+                    break;
+                default:
+                    MVM_exception_throw_adhoc(tc, "addrtobuf buffer type must be an array of int8 or uint8");
+            }
+            break;
+        }
+#endif
+        default:
+            MVM_exception_throw_adhoc(tc, "Unsupported native address family: %hu", family);
+    }
+
+    return (MVMObject *)buf;
+}
+

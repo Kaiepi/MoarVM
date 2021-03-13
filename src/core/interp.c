@@ -5799,6 +5799,21 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 4;
                 goto NEXT;
             }
+            OP(addrtobuf): {
+                MVMObject *address  = GET_REG(cur_op, 2).o;
+                MVMObject *buf_type = GET_REG(cur_op, 4).o;
+                if (REPR(address)->ID != MVM_REPR_ID_MVMAddress || !IS_CONCRETE(address))
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtobuf requires a concrete object of REPR MVMAddress, got %s (%s)",
+                        REPR(address)->name, MVM_6model_get_debug_name(tc, address));
+                if (REPR(buf_type)->ID != MVM_REPR_ID_VMArray)
+                    MVM_exception_throw_adhoc(tc,
+                        "addrtobuf requires an object of REPR VMArray, got %s (%s)",
+                        REPR(buf_type)->name, MVM_6model_get_debug_name(tc, buf_type));
+                GET_REG(cur_op, 0).o = MVM_address_to_buffer(tc, (MVMAddress *)address, (MVMArray *)buf_type);
+                cur_op += 6;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;

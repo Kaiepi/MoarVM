@@ -11,3 +11,4 @@ MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address);
 MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address);
 
 MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address);
+MVMObject * MVM_address_to_buffer(MVMThreadContext *tc, MVMAddress *address, MVMArray *buf_type);
