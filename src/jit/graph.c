@@ -1925,6 +1925,7 @@ start:
     case MVM_OP_addrfrombuf_ip4:
     case MVM_OP_addrfrombuf_ip6:
     case MVM_OP_addrfrombuf_un:
+    case MVM_OP_addrtobuf:
         /* Profiling */
     case MVM_OP_prof_enterspesh:
     case MVM_OP_prof_enterinline:
