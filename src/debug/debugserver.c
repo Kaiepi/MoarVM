@@ -8,7 +8,6 @@
 #define false FALSE
 
 #include "cmp.h"
-#include "platform/socket.h"
 
 typedef enum {
     MT_MessageTypeNotUnderstood,

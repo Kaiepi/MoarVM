@@ -1,5 +1,4 @@
 #include "moar.h"
-#include "platform/socket.h"
 
 #if defined(_MSC_VER)
 #define snprintf _snprintf
