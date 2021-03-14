@@ -2467,7 +2467,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         /* If so, get its port. */
         |2:
         | mov ARG1, TC;
-        | callp &MVM_address_get_port;
+        | callp &MVM_io_address_get_port;
         | movzx RV, RVw;
         | mov qword WORK[result], RV;
         break;
@@ -2487,7 +2487,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         /* If so, get its scope ID. */
         |2:
         | mov ARG1, TC;
-        | callp &MVM_address_get_scope_id;
+        | callp &MVM_io_address_get_scope_id;
         | mov WORK[result], RV;
         break;
     }
@@ -2506,7 +2506,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         /* If so, coerce it to a string. */
         |2:
         | mov ARG1, TC;
-        | callp &MVM_address_to_string;
+        | callp &MVM_io_address_to_string;
         | mov aword WORK[result], RV;
         break;
     }
@@ -2527,7 +2527,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         |2:
         | mov ARG1, TC;
         | movzx ARG3, word WORK[port];
-        | callp &MVM_address_from_ipv4_address;
+        | callp &MVM_io_address_from_ipv4_address;
         | mov aword WORK[result], RV;
         break;
     }
@@ -2550,7 +2550,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         | mov ARG1, TC;
         | movzx ARG3, word WORK[port];
         | mov ARG4, aword WORK[zone_id];
-        | callp &MVM_address_from_ipv6_address;
+        | callp &MVM_io_address_from_ipv6_address;
         | mov aword WORK[result], RV;
         break;
     }
@@ -2569,7 +2569,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         /* If so, create an IPv4 address from it. */
         |2:
         | mov ARG1, TC;
-        | callp &MVM_address_from_unix_address;
+        | callp &MVM_io_address_from_unix_address;
         | mov aword WORK[result], RV;
         break;
     }
@@ -2596,7 +2596,7 @@ void MVM_jit_emit_primitive(MVMThreadContext *tc, MVMJitCompiler *compiler, MVMJ
         /* If so, coerce the address to the buffer's type. */
         |3:
         | mov ARG1, TC;
-        | callp &MVM_address_to_buffer;
+        | callp &MVM_io_address_to_buffer;
         | mov aword WORK[result], RV;
         break;
     }

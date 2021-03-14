@@ -5724,17 +5724,17 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 2;
                 goto NEXT;
             OP(addrfromstr_ip4):
-                GET_REG(cur_op, 0).o = MVM_address_from_ipv4_presentation(tc,
+                GET_REG(cur_op, 0).o = MVM_io_address_from_ipv4_presentation(tc,
                     GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64);
                 cur_op += 6;
                 goto NEXT;
             OP(addrfromstr_ip6):
-                GET_REG(cur_op, 0).o = MVM_address_from_ipv6_presentation(tc,
+                GET_REG(cur_op, 0).o = MVM_io_address_from_ipv6_presentation(tc,
                     GET_REG(cur_op, 2).s, (MVMuint16)GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).s);
                 cur_op += 8;
                 goto NEXT;
             OP(addrfromstr_un):
-                GET_REG(cur_op, 0).o = MVM_address_from_path(tc, GET_REG(cur_op, 2).s);
+                GET_REG(cur_op, 0).o = MVM_io_address_from_path(tc, GET_REG(cur_op, 2).s);
                 cur_op += 4;
                 goto NEXT;
             OP(getaddrport): {
@@ -5743,7 +5743,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     MVM_exception_throw_adhoc(tc,
                         "getaddrport requires a concrete object of REPR MVMAddress, got %s (%s)",
                         REPR(address)->name, MVM_6model_get_debug_name(tc, address));
-                GET_REG(cur_op, 0).i64 = (MVMint64)MVM_address_get_port(tc, (MVMAddress *)address);
+                GET_REG(cur_op, 0).i64 = (MVMint64)MVM_io_address_get_port(tc, (MVMAddress *)address);
                 cur_op += 4;
                 goto NEXT;
             }
@@ -5753,7 +5753,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     MVM_exception_throw_adhoc(tc,
                         "getaddrscopeid requires a concrete object of REPR MVMAddress, got %s (%s)",
                         REPR(address)->name, MVM_6model_get_debug_name(tc, address));
-                GET_REG(cur_op, 0).i64 = (MVMint64)MVM_address_get_scope_id(tc, (MVMAddress *)address);
+                GET_REG(cur_op, 0).i64 = (MVMint64)MVM_io_address_get_scope_id(tc, (MVMAddress *)address);
                 cur_op += 4;
                 goto NEXT;
             }
@@ -5763,7 +5763,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     MVM_exception_throw_adhoc(tc,
                         "addrtostr requires a concrete object of REPR MVMAddress, got %s (%s)",
                         REPR(address)->name, MVM_6model_get_debug_name(tc, address));
-                GET_REG(cur_op, 0).s = MVM_address_to_string(tc, (MVMAddress *)address);
+                GET_REG(cur_op, 0).s = MVM_io_address_to_string(tc, (MVMAddress *)address);
                 cur_op += 4;
                 goto NEXT;
             }
@@ -5773,7 +5773,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     MVM_exception_throw_adhoc(tc,
                         "addrfrombuf_ip4 requires a concrete object of REPR VMArray, got %s (%s)",
                         REPR(buf)->name, MVM_6model_get_debug_name(tc, buf));
-                GET_REG(cur_op, 0).o = MVM_address_from_ipv4_address(tc,
+                GET_REG(cur_op, 0).o = MVM_io_address_from_ipv4_address(tc,
                     (MVMArray *)buf, (MVMuint16)GET_REG(cur_op, 4).i64);
                 cur_op += 6;
                 goto NEXT;
@@ -5784,7 +5784,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     MVM_exception_throw_adhoc(tc,
                         "addrfrombuf_ip6 requires a concrete object of REPR VMArray, got %s (%s)",
                         REPR(buf)->name, MVM_6model_get_debug_name(tc, buf));
-                GET_REG(cur_op, 0).o = MVM_address_from_ipv6_address(tc,
+                GET_REG(cur_op, 0).o = MVM_io_address_from_ipv6_address(tc,
                     (MVMArray *)buf, (MVMuint16)GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).s);
                 cur_op += 8;
                 goto NEXT;
@@ -5795,7 +5795,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     MVM_exception_throw_adhoc(tc,
                         "addrfrombuf_un requires a concrete object of REPR VMArray, got %s (%s)",
                         REPR(buf)->name, MVM_6model_get_debug_name(tc, buf));
-                GET_REG(cur_op, 0).o = MVM_address_from_unix_address(tc, (MVMArray *)buf);
+                GET_REG(cur_op, 0).o = MVM_io_address_from_unix_address(tc, (MVMArray *)buf);
                 cur_op += 4;
                 goto NEXT;
             }
@@ -5810,7 +5810,7 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                     MVM_exception_throw_adhoc(tc,
                         "addrtobuf requires an object of REPR VMArray, got %s (%s)",
                         REPR(buf_type)->name, MVM_6model_get_debug_name(tc, buf_type));
-                GET_REG(cur_op, 0).o = MVM_address_to_buffer(tc, (MVMAddress *)address, (MVMArray *)buf_type);
+                GET_REG(cur_op, 0).o = MVM_io_address_to_buffer(tc, (MVMAddress *)address, (MVMArray *)buf_type);
                 cur_op += 6;
                 goto NEXT;
             }

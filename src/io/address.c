@@ -20,7 +20,7 @@ MVM_STATIC_INLINE void memcpy_swap(void *dst, const void *src, const size_t elem
 #endif
 }
 
-MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc, MVMString *presentation, MVMuint16 port) {
+MVMObject * MVM_io_address_from_ipv4_presentation(MVMThreadContext *tc, MVMString *presentation, MVMuint16 port) {
     char               *presentation_cstr;
     struct sockaddr_in  socket_address;
     MVMAddress         *address;
@@ -40,12 +40,12 @@ MVMObject * MVM_address_from_ipv4_presentation(MVMThreadContext *tc, MVMString *
     MVMROOT(tc, presentation, {
         address                   = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
         memcpy(&address->body.storage, &socket_address, sizeof(struct sockaddr_in));
-        MVM_address_set_length(&address->body, sizeof(struct sockaddr_in));
+        MVM_io_address_set_length(&address->body, sizeof(struct sockaddr_in));
     });
     return (MVMObject *)address;
 }
 
-MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
+MVMObject * MVM_io_address_from_ipv6_presentation(MVMThreadContext *tc,
         MVMString *presentation, MVMuint16 port, MVMString *zone_id) {
     char                *presentation_cstr;
     char                *zone_id_cstr;
@@ -87,7 +87,7 @@ MVMObject * MVM_address_from_ipv6_presentation(MVMThreadContext *tc,
     MVMROOT(tc, presentation, {
         address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
         memcpy(&address->body.storage, &socket_address, sizeof(struct sockaddr_in6));
-        MVM_address_set_length(&address->body, sizeof(struct sockaddr_in6));
+        MVM_io_address_set_length(&address->body, sizeof(struct sockaddr_in6));
     });
     return (MVMObject *)address;
 
@@ -103,7 +103,7 @@ zone_error:
         presentation_cstr, zone_id_cstr);
 }
 
-MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
+MVMObject * MVM_io_address_from_path(MVMThreadContext *tc, MVMString *path) {
 #ifdef MVM_HAS_PF_UNIX
     MVMuint64           path_len;
     char               *path_cstr;
@@ -127,7 +127,7 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
         MVMuint8 socket_address_size = sizeof(socket_address) - MVM_SUN_PATH_SIZE + path_len;
         address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
         memcpy(&address->body.storage, &socket_address, socket_address_size);
-        MVM_address_set_length(&address->body, socket_address_size);
+        MVM_io_address_set_length(&address->body, socket_address_size);
     });
     return (MVMObject *)address;
 #else
@@ -135,7 +135,7 @@ MVMObject * MVM_address_from_path(MVMThreadContext *tc, MVMString *path) {
 #endif
 }
 
-MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *buf, MVMuint16 port) {
+MVMObject * MVM_io_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *buf, MVMuint16 port) {
     MVMArrayREPRData   *repr_data;
     MVMAddress         *address;
     struct sockaddr_in *socket_address;
@@ -166,11 +166,11 @@ MVMObject * MVM_address_from_ipv4_address(MVMThreadContext *tc, MVMArray *buf, M
     socket_address->sin_family = AF_INET;
     socket_address->sin_port   = htons(port);
     memcpy_swap(&socket_address->sin_addr, buf->body.slots.u8, buf->body.elems, repr_data->elem_size);
-    MVM_address_set_length(&address->body, sizeof(*socket_address));
+    MVM_io_address_set_length(&address->body, sizeof(*socket_address));
     return (MVMObject *)address;
 }
 
-MVMObject * MVM_address_from_ipv6_address(MVMThreadContext *tc, MVMArray *buf, MVMuint16 port, MVMString *zone_id) {
+MVMObject * MVM_io_address_from_ipv6_address(MVMThreadContext *tc, MVMArray *buf, MVMuint16 port, MVMString *zone_id) {
     MVMArrayREPRData    *repr_data;
     MVMAddress          *address;
     struct sockaddr_in6 *socket_address;
@@ -222,7 +222,7 @@ MVMObject * MVM_address_from_ipv6_address(MVMThreadContext *tc, MVMArray *buf, M
         MVM_free(zone_id_cstr);
     }
     memcpy_swap(&socket_address->sin6_addr, buf->body.slots.u8, buf->body.elems, repr_data->elem_size);
-    MVM_address_set_length(&address->body, sizeof(*socket_address));
+    MVM_io_address_set_length(&address->body, sizeof(*socket_address));
     return (MVMObject *)address;
 
 zone_error:
@@ -232,7 +232,7 @@ zone_error:
         zone_id_cstr);
 }
 
-MVMObject * MVM_address_from_unix_address(MVMThreadContext *tc, MVMArray *buf) {
+MVMObject * MVM_io_address_from_unix_address(MVMThreadContext *tc, MVMArray *buf) {
 #ifdef MVM_HAS_PF_UNIX
     MVMArrayREPRData *repr_data = (MVMArrayREPRData *)STABLE(buf)->REPR_data;
     if (repr_data->slot_type != MVM_ARRAY_I8 && repr_data->slot_type != MVM_ARRAY_U8)
@@ -251,7 +251,7 @@ MVMObject * MVM_address_from_unix_address(MVMThreadContext *tc, MVMArray *buf) {
         socket_address             = &address->body.storage.sun;
         socket_address->sun_family = AF_UNIX;
         memcpy(socket_address->sun_path, buf->body.slots.i8, buf->body.elems);
-        MVM_address_set_length(&address->body, sizeof(*socket_address) - MVM_SUN_PATH_SIZE + buf->body.elems);
+        MVM_io_address_set_length(&address->body, sizeof(*socket_address) - MVM_SUN_PATH_SIZE + buf->body.elems);
         return (MVMObject *)address;
     }
 #else
@@ -259,8 +259,8 @@ MVMObject * MVM_address_from_unix_address(MVMThreadContext *tc, MVMArray *buf) {
 #endif
 }
 
-MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
-    switch (MVM_address_get_family(&address->body)) {
+MVMuint16 MVM_io_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
+    switch (MVM_io_address_get_family(&address->body)) {
         case AF_INET:
             return ntohs(address->body.storage.sin.sin_port);
         case AF_INET6:
@@ -270,18 +270,18 @@ MVMuint16 MVM_address_get_port(MVMThreadContext *tc, MVMAddress *address) {
     }
 }
 
-MVMuint32 MVM_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address) {
-    if (MVM_address_get_family(&address->body) == AF_INET6)
+MVMuint32 MVM_io_address_get_scope_id(MVMThreadContext *tc, MVMAddress *address) {
+    if (MVM_io_address_get_family(&address->body) == AF_INET6)
         return address->body.storage.sin6.sin6_scope_id;
     else
         MVM_exception_throw_adhoc(tc, "Can only get the scope ID of an IPv6 address");
 }
 
-MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
+MVMString * MVM_io_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
     sa_family_t  family;
     MVMString   *address_str;
 
-    switch (family = MVM_address_get_family(&address->body)) {
+    switch (family = MVM_io_address_get_family(&address->body)) {
         case AF_INET: {
             char address_cstr[INET_ADDRSTRLEN];
             int  error;
@@ -320,7 +320,7 @@ MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
         case AF_UNIX:
             MVMROOT(tc, address, {
                 address_str = MVM_string_utf8_c8_decode(tc, tc->instance->VMString, address->body.storage.sun.sun_path,
-                    MVM_address_get_length(&address->body) - sizeof(struct sockaddr_un) + MVM_SUN_PATH_SIZE);
+                    MVM_io_address_get_length(&address->body) - sizeof(struct sockaddr_un) + MVM_SUN_PATH_SIZE);
             });
             break;
 #endif
@@ -332,13 +332,13 @@ MVMString * MVM_address_to_string(MVMThreadContext *tc, MVMAddress *address) {
     return address_str;
 }
 
-MVMObject * MVM_address_to_buffer(MVMThreadContext *tc, MVMAddress *address, MVMArray *buf_type) {
+MVMObject * MVM_io_address_to_buffer(MVMThreadContext *tc, MVMAddress *address, MVMArray *buf_type) {
     MVMArrayREPRData *repr_data;
     sa_family_t       family;
     MVMArray         *buf;
 
     repr_data = (MVMArrayREPRData *)STABLE(buf_type)->REPR_data;
-    switch (family = MVM_address_get_family(&address->body)) {
+    switch (family = MVM_io_address_get_family(&address->body)) {
         case AF_INET: {
             switch (repr_data->slot_type) {
                 case MVM_ARRAY_U8:
@@ -389,7 +389,7 @@ MVMObject * MVM_address_to_buffer(MVMThreadContext *tc, MVMAddress *address, MVM
                         buf                = (MVMArray *)MVM_repr_alloc_init(tc, (MVMObject *)buf_type);
                         buf->body.start    = 0;
                         buf->body.ssize    = buf->body.elems =
-                            MVM_address_get_length(&address->body) - sizeof(struct sockaddr_un) + MVM_SUN_PATH_SIZE;
+                            MVM_io_address_get_length(&address->body) - sizeof(struct sockaddr_un) + MVM_SUN_PATH_SIZE;
                         buf->body.slots.i8 = MVM_malloc(buf->body.ssize);
                         memcpy(buf->body.slots.i8, address->body.storage.sun.sun_path, buf->body.ssize);
                     });

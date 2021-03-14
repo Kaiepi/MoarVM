@@ -39,10 +39,10 @@ static void initialize(MVMThreadContext *tc, MVMSTable *st, MVMObject *root, voi
 static void copy_to(MVMThreadContext *tc, MVMSTable *st, void *src, MVMObject *dst_root, void *dst) {
     MVMAddressBody *src_body = (MVMAddressBody *)src;
     MVMAddressBody *dst_body = (MVMAddressBody *)dst;
-    socklen_t       len      = MVM_address_get_length(src_body);
+    socklen_t       len      = MVM_io_address_get_length(src_body);
     memcpy(&dst_body->storage, &src_body->storage, len);
 #ifndef MVM_HAS_SA_LEN
-    MVM_address_set_length(dst_body, len);
+    MVM_io_address_set_length(dst_body, len);
 #endif
 }
 
@@ -63,7 +63,7 @@ static const MVMStorageSpec * get_storage_spec(MVMThreadContext *tc, MVMSTable *
 /* Serializes the data. */
 static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerializationWriter *writer) {
     MVMAddressBody *body   = (MVMAddressBody *)data;
-    MVMint64        family = MVM_address_get_family(body);
+    MVMint64        family = MVM_io_address_get_family(body);
     MVM_serialization_write_int(tc, writer, family);
     switch (family) {
         case AF_INET: {
@@ -97,7 +97,7 @@ static void serialize(MVMThreadContext *tc, MVMSTable *st, void *data, MVMSerial
 #ifdef MVM_HAS_PF_UNIX
         case AF_UNIX: {
             struct sockaddr_un *socket_address = &body->storage.sun;
-            socklen_t           len            = MVM_address_get_length(body);
+            socklen_t           len            = MVM_io_address_get_length(body);
             MVM_serialization_write_ptr(tc, writer, socket_address->sun_path,
                 sizeof(*socket_address) - sizeof(socket_address->sun_path) + len);
             break;
@@ -121,7 +121,7 @@ static void deserialize(MVMThreadContext *tc,
             socket_address.sin_addr.s_addr = htonl(MVM_serialization_read_int(tc, reader));
             socket_address.sin_port        = htons(MVM_serialization_read_int(tc, reader));
             memcpy(&body->storage, &socket_address, sizeof(socket_address));
-            MVM_address_set_length(body, sizeof(socket_address));
+            MVM_io_address_set_length(body, sizeof(socket_address));
             break;
         }
         case AF_INET6: {
@@ -145,7 +145,7 @@ static void deserialize(MVMThreadContext *tc,
             socket_address.sin6_port     = (MVMuint32)MVM_serialization_read_int(tc, reader);
             socket_address.sin6_scope_id = (MVMuint32)MVM_serialization_read_int(tc, reader);
             memcpy(&body->storage, &socket_address, sizeof(socket_address));
-            MVM_address_set_length(body, sizeof(socket_address));
+            MVM_io_address_set_length(body, sizeof(socket_address));
             break;
 #undef NA_ELEMS
 #undef NA_SIZE
@@ -161,7 +161,7 @@ static void deserialize(MVMThreadContext *tc,
             path                      = MVM_serialization_read_ptr(tc, reader, &path_len);
             memcpy(socket_address.sun_path, path, path_len);
             memcpy(&body->storage, &socket_address, sizeof(socket_address));
-            MVM_address_set_length(body, sizeof(socket_address) - sizeof(socket_address.sun_path) + path_len);
+            MVM_io_address_set_length(body, sizeof(socket_address) - sizeof(socket_address.sun_path) + path_len);
             MVM_free(path);
             break;
         }

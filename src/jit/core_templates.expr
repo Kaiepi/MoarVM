@@ -2677,14 +2677,14 @@
       (^vmnull))))
 
 (template: addrfromstr_ip4
-  (call (^func &MVM_address_from_ipv4_presentation)
+  (call (^func &MVM_io_address_from_ipv4_presentation)
     (arglist
       (carg (tc) ptr)
       (carg $1 ptr)
       (carg $2 int)) ptr_sz))
 
 (template: addrfromstr_ip6
-  (call (^func &MVM_address_from_ipv6_presentation)
+  (call (^func &MVM_io_address_from_ipv6_presentation)
     (arglist
       (carg (tc) ptr)
       (carg $1 ptr)
@@ -2692,7 +2692,7 @@
       (carg $2 ptr)) ptr_sz))
 
 (template: addrfromstr_un
-  (call (^func &MVM_address_from_path)
+  (call (^func &MVM_io_address_from_path)
     (arglist
       (carg (tc) ptr)
       (carg $1 ptr)) ptr_sz))
