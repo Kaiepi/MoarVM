@@ -220,6 +220,7 @@ MVM_PUBLIC MVMint32 MVM_jit_support(void);
 #include "io/eventloop.h"
 #include "io/syncfile.h"
 #include "io/address.h"
+#include "io/dns.h"
 #include "io/syncsocket.h"
 #include "io/fileops.h"
 #include "io/dirops.h"

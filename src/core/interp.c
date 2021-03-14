@@ -5814,6 +5814,13 @@ void MVM_interp_run(MVMThreadContext *tc, void (*initial_invoke)(MVMThreadContex
                 cur_op += 6;
                 goto NEXT;
             }
+            OP(dnslookup): {
+                GET_REG(cur_op, 0).o = MVM_io_dns_lookup(tc, GET_REG(cur_op, 2).s,
+                    GET_REG(cur_op, 4).i64, GET_REG(cur_op, 6).i64, GET_REG(cur_op, 8).i64,
+                    GET_REG(cur_op, 10).i64);
+                cur_op += 12;
+                goto NEXT;
+            }
             OP(sp_guard): {
                 MVMRegister *target = &GET_REG(cur_op, 0);
                 MVMObject *check = GET_REG(cur_op, 2).o;
