@@ -485,6 +485,88 @@ MVMint64 socket_getport(MVMThreadContext *tc, MVMOSHandle *h) {
     return port;
 }
 
+static MVMObject * get_socket_address(MVMThreadContext *tc, MVMOSHandle *h) {
+    MVMIOSyncSocketData *data;
+    MVMAddress          *address;
+    socklen_t            len;
+    int                  error;
+
+    data    = (MVMIOSyncSocketData *)h->body.data;
+    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    error   = getsockname(data->handle, &address->body.storage.sa, &len);
+    if (error)
+        MVM_exception_throw_adhoc(tc, "Error getting the local address of a socket: %s", strerror(errno));
+    else {
+        MVMObject *arr;
+#ifndef MVM_HAS_SA_LEN
+        MVM_io_address_set_length(&address->body, len);
+#endif
+        arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVMROOT(tc, arr, {
+            sa_family_t family;
+
+            switch (family = MVM_io_address_get_family(&address->body)) {
+                case PF_INET:
+                    family = MVM_PROTOCOL_FAMILY_INET;
+                    break;
+                case PF_INET6:
+                    family = MVM_PROTOCOL_FAMILY_INET6;
+                    break;
+                case PF_UNIX:
+                    family = MVM_PROTOCOL_FAMILY_UNIX;
+                    break;
+                default:
+                    MVM_exception_throw_adhoc(tc, "Unknown native address family: %hu", family);
+            }
+
+            MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, (MVMint64)family));
+        });
+        MVM_repr_push_o(tc, arr, (MVMObject *)address);
+        return arr;
+    }
+}
+
+static MVMObject * get_peer_address(MVMThreadContext *tc, MVMOSHandle *h) {
+    MVMIOSyncSocketData *data;
+    MVMAddress          *address;
+    socklen_t            len;
+    int                  error;
+
+    data    = (MVMIOSyncSocketData *)h->body.data;
+    address = (MVMAddress *)MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTAddress);
+    error   = getpeername(data->handle, &address->body.storage.sa, &len);
+    if (error)
+        MVM_exception_throw_adhoc(tc, "Error getting the remote address of a socket: %s", strerror(errno));
+    else {
+        MVMObject *arr;
+#ifndef MVM_HAS_SA_LEN
+        MVM_io_address_set_length(&address->body, len);
+#endif
+        arr = MVM_repr_alloc_init(tc, tc->instance->boot_types.BOOTArray);
+        MVMROOT(tc, arr, {
+            sa_family_t family;
+
+            switch (family = MVM_io_address_get_family(&address->body)) {
+                case PF_INET:
+                    family = MVM_PROTOCOL_FAMILY_INET;
+                    break;
+                case PF_INET6:
+                    family = MVM_PROTOCOL_FAMILY_INET6;
+                    break;
+                case PF_UNIX:
+                    family = MVM_PROTOCOL_FAMILY_UNIX;
+                    break;
+                default:
+                    MVM_exception_throw_adhoc(tc, "Unknown native address family: %hu", family);
+            }
+
+            MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, (MVMint64)family));
+        });
+        MVM_repr_push_o(tc, arr, (MVMObject *)address);
+        return arr;
+    }
+}
+
 static MVMint64 socket_is_tty(MVMThreadContext *tc, MVMOSHandle *h) {
     MVMIOSyncSocketData *data = (MVMIOSyncSocketData *)h->body.data;
     return (MVMint64)MVM_platform_isatty(data->handle);
@@ -504,10 +586,12 @@ static const MVMIOSyncReadable  sync_readable = { socket_read_bytes,
 static const MVMIOSyncWritable  sync_writable = { socket_write_bytes,
                                                   socket_flush,
                                                   socket_truncate };
-static const MVMIOSockety             sockety = { socket_connect,
+static const MVMIOSockety       sockety       = { socket_connect,
                                                   socket_bind,
                                                   socket_accept,
                                                   socket_getport };
+static const MVMIOAddressable   addressable   = { get_socket_address,
+                                                  get_peer_address };
 static const MVMIOIntrospection introspection = { socket_is_tty,
                                                   socket_handle };
 
@@ -520,6 +604,7 @@ static const MVMIOOps op_table = {
     NULL,
     NULL,
     &sockety,
+    &addressable,
     NULL,
     NULL,
     &introspection,
