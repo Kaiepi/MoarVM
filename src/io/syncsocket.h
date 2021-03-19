@@ -7,7 +7,9 @@
 #define MVM_SOCKET_PROTOCOL_TCP 1
 #define MVM_SOCKET_PROTOCOL_UDP 2
 
-MVMObject * MVM_io_socket_create(MVMThreadContext *tc, MVMint64 listen);
+MVMObject * MVM_io_socket_create(MVMThreadContext *tc,
+        MVMint64 family, MVMint64 type, MVMint64 protocol,
+        MVMint64 passive);
 /* TODO: MVMuint16 can be too small for the machine's value for the
  *       given family, which this function doesn't use anymore in the
  *       first place and can be any Int from Raku land; it should be an

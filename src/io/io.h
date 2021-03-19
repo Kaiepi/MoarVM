@@ -57,7 +57,7 @@ struct MVMIOAsyncWritable {
  * network destination. */
 struct MVMIOAsyncWritableTo {
     MVMAsyncTask * (*write_bytes_to) (MVMThreadContext *tc, MVMOSHandle *h, MVMObject *queue,
-        MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type, MVMString *host, MVMint64 port);
+        MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type, MVMAddress *address);
 };
 
 /* I/O operations on handles that can seek/tell. */
@@ -68,8 +68,8 @@ struct MVMIOSeekable {
 
 /* I/O operations on handles that do socket-y things (connect, bind, accept). */
 struct MVMIOSockety {
-    void (*connect) (MVMThreadContext *tc, MVMOSHandle *h, MVMString *host, MVMint64 port, MVMuint16 family);
-    void (*bind) (MVMThreadContext *tc, MVMOSHandle *h, MVMString *host, MVMint64 port, MVMuint16 family, MVMint32 backlog);
+    void (*connect) (MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address);
+    void (*bind) (MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address, MVMint32 backlog);
     MVMObject * (*accept) (MVMThreadContext *tc, MVMOSHandle *h);
     MVMint64 (*getport) (MVMThreadContext *tc, MVMOSHandle *h);
 };
@@ -106,14 +106,14 @@ MVMObject * MVM_io_read_bytes_async(MVMThreadContext *tc, MVMObject *oshandle, M
 MVMObject * MVM_io_write_bytes_async(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *queue,
         MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type);
 MVMObject * MVM_io_write_bytes_to_async(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *queue,
-        MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type, MVMString *host, MVMint64 port);
+        MVMObject *schedulee, MVMObject *buffer, MVMObject *async_type, MVMObject *maybe_address);
 MVMint64 MVM_io_eof(MVMThreadContext *tc, MVMObject *oshandle);
 MVMint64 MVM_io_lock(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 flag);
 void MVM_io_unlock(MVMThreadContext *tc, MVMObject *oshandle);
 void MVM_io_flush(MVMThreadContext *tc, MVMObject *oshandle, MVMint32 sync);
 void MVM_io_truncate(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 offset);
-void MVM_io_connect(MVMThreadContext *tc, MVMObject *oshandle, MVMString *host, MVMint64 port, MVMuint16 family);
-void MVM_io_bind(MVMThreadContext *tc, MVMObject *oshandle, MVMString *host, MVMint64 port, MVMuint16 family, MVMint32 backlog);
+void MVM_io_connect(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *maybe_address);
+void MVM_io_bind(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *maybe_address, MVMint32 backlog);
 MVMObject * MVM_io_accept(MVMThreadContext *tc, MVMObject *oshandle);
 MVMint64 MVM_io_getport(MVMThreadContext *tc, MVMObject *oshandle);
 MVMObject * MVM_io_get_socket_address(MVMThreadContext *tc, MVMObject *oshandle);

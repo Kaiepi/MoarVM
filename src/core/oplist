@@ -543,9 +543,9 @@ eof_fh              w(int64) r(obj)
 getstdin            w(obj) :pure
 getstdout           w(obj) :pure
 getstderr           w(obj) :pure
-connect_sk          r(obj) r(str) r(int64) r(uint16)
-socket              w(obj) r(int64)
-bind_sk             r(obj) r(str) r(int64) r(uint16) r(int64)
+connect_sk          r(obj) r(obj)
+socket              w(obj) r(int64) r(int64) r(int64) r(int64)
+bind_sk             r(obj) r(obj) r(int64)
 DEPRECATED_24       r(obj) r(str)
 accept_sk           w(obj) r(obj)
 decodetocodes       r(obj) r(str) r(int64) r(obj)
@@ -646,8 +646,8 @@ timer               w(obj) r(obj) r(obj) r(int64) r(int64) r(obj)
 cancel              r(obj)
 signal              w(obj) r(obj) r(obj) r(obj) r(obj) r(int64) r(obj)
 watchfile           w(obj) r(obj) r(obj) r(str) r(obj)
-asyncconnect        w(obj) r(obj) r(obj) r(str) r(int64) r(obj)
-asynclisten         w(obj) r(obj) r(obj) r(str) r(int64) r(int64) r(obj)
+asyncconnect        w(obj) r(obj) r(obj) r(obj) r(obj)
+asynclisten         w(obj) r(obj) r(obj) r(obj) r(int64) r(obj)
 DEPRECATED_14       w(obj) r(obj) r(obj) r(obj) r(str) r(obj)
 asyncwritebytes     w(obj) r(obj) r(obj) r(obj) r(obj) r(obj)
 DEPRECATED_16       w(obj) r(obj) r(obj) r(obj) r(obj)
@@ -760,9 +760,9 @@ multidimref_i       w(obj) r(obj) r(obj) :pure :useshll
 multidimref_n       w(obj) r(obj) r(obj) :pure :useshll
 multidimref_s       w(obj) r(obj) r(obj) :pure :useshll
 fileno_fh           w(int64) r(obj) :pure
-asyncudp            w(obj) r(obj) r(obj) r(str) r(int64) r(int64) r(obj)
+asyncudp            w(obj) r(obj) r(obj) r(obj) r(int64) r(obj)
 DEPRECATED_15       w(obj) r(obj) r(obj) r(obj) r(str) r(obj) r(str) r(int64)
-asyncwritebytesto   w(obj) r(obj) r(obj) r(obj) r(obj) r(obj) r(str) r(int64)
+asyncwritebytesto   w(obj) r(obj) r(obj) r(obj) r(obj) r(obj) r(obj)
 objprimbits         w(int64) r(obj) :specializable
 objprimunsigned     w(int64) r(obj) :specializable
 DEPRECATED_5        w(obj) r(int32) :pure :noinline

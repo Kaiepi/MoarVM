@@ -1877,15 +1877,16 @@
     (arglist
       (carg (tc) ptr)
       (carg $0   ptr)
-      (carg $1   ptr)
-      (carg $2   int)
-      (carg $3   int))))
+      (carg $1   ptr))))
 
 (template: socket
   (call (^func &MVM_io_socket_create)
     (arglist
       (carg (tc) ptr)
-      (carg $1   int)) ptr_sz))
+      (carg $1   int)
+      (carg $2   int)
+      (carg $3   int)
+      (carg $4   int)) ptr_sz))
 
 (template: bind_sk
   (callv (^func &MVM_io_bind)
@@ -1893,9 +1894,7 @@
       (carg (tc) ptr)
       (carg $0   ptr)
       (carg $1   ptr)
-      (carg $2   int)
-      (carg $3   int)
-      (carg $4   int))))
+      (carg $2   int))))
 
 (template: accept_sk
   (call (^func &MVM_io_accept)
@@ -2181,8 +2180,7 @@
       (carg $1   ptr)
       (carg $2   ptr)
       (carg $3   ptr)
-      (carg $4   int)
-      (carg $5   ptr)) ptr_sz))
+      (carg $4   ptr)) ptr_sz))
 
 (template: asynclisten
   (call (^func &MVM_io_socket_listen_async)
@@ -2192,8 +2190,7 @@
       (carg $2   ptr)
       (carg $3   ptr)
       (carg $4   int)
-      (carg $5   int)
-      (carg $6   ptr)) ptr_sz))
+      (carg $5   ptr)) ptr_sz))
 
 (template: asyncwritebytes
   (call (^func &MVM_io_write_bytes_async)
