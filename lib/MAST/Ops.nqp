@@ -4557,7 +4557,7 @@ BEGIN {
     'setdispatcherfor', 758,
     'strfromname', 759,
     'indexic_s', 760,
-    'getport_sk', 761,
+    'DEPRECATED_40', 761,
     'cpucores', 762,
     'eqaticim_s', 763,
     'indexicim_s', 764,
@@ -5396,7 +5396,7 @@ BEGIN {
     'setdispatcherfor',
     'strfromname',
     'indexic_s',
-    'getport_sk',
+    'DEPRECATED_40',
     'cpucores',
     'eqaticim_s',
     'indexicim_s',
@@ -11202,7 +11202,7 @@ BEGIN {
         my uint $index2 := nqp::unbox_u($op2); nqp::writeuint($bytecode, nqp::add_i($elems, 6), $index2, 5);
         my uint $index3 := nqp::unbox_u($op3); nqp::writeuint($bytecode, nqp::add_i($elems, 8), $index3, 5);
     },
-    'getport_sk', sub ($op0, $op1) {
+    'DEPRECATED_40', sub ($op0, $op1) {
         my $bytecode := $*MAST_FRAME.bytecode;
         my uint $elems := nqp::elems($bytecode);
         nqp::writeuint($bytecode, $elems, 761, 5);

@@ -762,7 +762,7 @@ static const void * const LABELS[] = {
     &&OP_setdispatcherfor,
     &&OP_strfromname,
     &&OP_indexic_s,
-    &&OP_getport_sk,
+    &&OP_DEPRECATED_40,
     &&OP_cpucores,
     &&OP_eqaticim_s,
     &&OP_indexicim_s,

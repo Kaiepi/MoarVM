@@ -71,7 +71,6 @@ struct MVMIOSockety {
     void (*connect) (MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address);
     void (*bind) (MVMThreadContext *tc, MVMOSHandle *h, MVMAddress *address, MVMint32 backlog);
     MVMObject * (*accept) (MVMThreadContext *tc, MVMOSHandle *h);
-    MVMint64 (*getport) (MVMThreadContext *tc, MVMOSHandle *h);
 };
 
 /* I/O operations on handles that can carry addresses. */
@@ -115,7 +114,6 @@ void MVM_io_truncate(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 offset)
 void MVM_io_connect(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *maybe_address);
 void MVM_io_bind(MVMThreadContext *tc, MVMObject *oshandle, MVMObject *maybe_address, MVMint32 backlog);
 MVMObject * MVM_io_accept(MVMThreadContext *tc, MVMObject *oshandle);
-MVMint64 MVM_io_getport(MVMThreadContext *tc, MVMObject *oshandle);
 MVMObject * MVM_io_get_socket_address(MVMThreadContext *tc, MVMObject *oshandle);
 MVMObject * MVM_io_get_peer_address(MVMThreadContext *tc, MVMObject *oshandle);
 void MVM_io_set_buffer_size(MVMThreadContext *tc, MVMObject *oshandle, MVMint64 size);

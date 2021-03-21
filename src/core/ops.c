@@ -10656,8 +10656,8 @@ static const MVMOpInfo MVM_op_infos[] = {
         { MVM_operand_write_reg | MVM_operand_int64, MVM_operand_read_reg | MVM_operand_str, MVM_operand_read_reg | MVM_operand_str, MVM_operand_read_reg | MVM_operand_int64 }
     },
     {
-        MVM_OP_getport_sk,
-        "getport_sk",
+        MVM_OP_DEPRECATED_40,
+        "DEPRECATED_40",
         2,
         0,
         0,
