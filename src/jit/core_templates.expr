@@ -2707,6 +2707,18 @@
       (carg $4 int)
       (carg $5 int)) ptr_sz))
 
+(template: getsockname
+  (call (^func &MVM_io_get_socket_address)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1 ptr)) ptr_sz))
+
+(template: getpeername
+  (call (^func &MVM_io_get_peer_address)
+    (arglist
+      (carg (tc) ptr)
+      (carg $1 ptr)) ptr_sz))
+
 (macro: ^deopt_one (,deopt_idx)
   (dov (callv (^func MVM_spesh_deopt_one) (arglist (carg (tc) ptr) (carg ,deopt_idx int))) (^exit)))
 
