@@ -167,7 +167,7 @@ static void deserialize(MVMThreadContext *tc,
         }
 #endif
         default:
-            MVM_exception_throw_adhoc(tc, "Unsupported native socket family: %hhu", family);
+            MVM_exception_throw_adhoc(tc, "Unsupported native socket family: %hu", (MVMuint16)family);
     }
 }
 

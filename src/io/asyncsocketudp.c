@@ -86,8 +86,8 @@ static void on_read(uv_udp_t *handle, ssize_t nread, const uv_buf_t *buf, const 
                         break;
                     default:
                         MVM_exception_throw_adhoc(tc,
-                            "Unsupported native address family: %hu",
-                            native_address->sa_family);
+                            "Unsupported native address family: %"PRIu16"",
+                            (MVMuint16)native_address->sa_family);
                 }
                 MVMROOT(tc, address, {
                     MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, family));
@@ -419,7 +419,7 @@ static MVMint64 close_socket(MVMThreadContext *tc, MVMOSHandle *h) {
 static MVMObject * get_socket_address(MVMThreadContext *tc, MVMOSHandle *h) {
     MVMIOAsyncUDPSocketData *data;
     MVMAddress              *address;
-    socklen_t                len;
+    int                      len;
     int                      error;
 
     data    = (MVMIOAsyncUDPSocketData *)h->body.data;
@@ -447,7 +447,7 @@ static MVMObject * get_socket_address(MVMThreadContext *tc, MVMOSHandle *h) {
                     family = MVM_PROTOCOL_FAMILY_UNIX;
                     break;
                 default:
-                    MVM_exception_throw_adhoc(tc, "Unknown native address family: %hu", family);
+                    MVM_exception_throw_adhoc(tc, "Unknown native address family: %"PRIu16"", (MVMuint16)family);
             }
 
             MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, (MVMint64)family));
@@ -460,7 +460,7 @@ static MVMObject * get_socket_address(MVMThreadContext *tc, MVMOSHandle *h) {
 static MVMObject * get_peer_address(MVMThreadContext *tc, MVMOSHandle *h) {
     MVMIOAsyncUDPSocketData *data;
     MVMAddress              *address;
-    socklen_t                len;
+    int                      len;
     int                      error;
 
     data    = (MVMIOAsyncUDPSocketData *)h->body.data;
@@ -488,7 +488,7 @@ static MVMObject * get_peer_address(MVMThreadContext *tc, MVMOSHandle *h) {
                     family = MVM_PROTOCOL_FAMILY_UNIX;
                     break;
                 default:
-                    MVM_exception_throw_adhoc(tc, "Unknown native address family: %hu", family);
+                    MVM_exception_throw_adhoc(tc, "Unknown native address family: %"PRIu16"", (MVMuint16)family);
             }
 
             MVM_repr_push_o(tc, arr, MVM_repr_box_int(tc, tc->instance->boot_types.BOOTInt, (MVMint64)family));

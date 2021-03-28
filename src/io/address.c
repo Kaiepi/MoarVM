@@ -325,7 +325,7 @@ MVMString * MVM_io_address_to_string(MVMThreadContext *tc, MVMAddress *address) 
             break;
 #endif
         default:
-            MVM_exception_throw_adhoc(tc, "Unsupported native address family: %hu", family);
+            MVM_exception_throw_adhoc(tc, "Unsupported native address family: %hu", (MVMuint16)family);
             break;
     }
 
@@ -401,7 +401,7 @@ MVMObject * MVM_io_address_to_buffer(MVMThreadContext *tc, MVMAddress *address, 
         }
 #endif
         default:
-            MVM_exception_throw_adhoc(tc, "Unsupported native address family: %hu", family);
+            MVM_exception_throw_adhoc(tc, "Unsupported native address family: %hu", (MVMuint16)family);
     }
 
     return (MVMObject *)buf;
